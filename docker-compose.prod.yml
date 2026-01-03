@@ -1,0 +1,17 @@
+services:
+  rust-app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: prod
+    container_name: rust-prod
+    volumes:
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+    environment:
+      APP_ENV: production
+      RUST_LOG: info
+
+volumes:
+  cargo-registry:
+  cargo-git:
