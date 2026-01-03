@@ -44,11 +44,7 @@ FROM base AS builder
 COPY . .
 RUN cargo build --release
 
-#RUN echo "APP_VERSION=$(cargo pkgid | awk -F# '{print $2}')" > /app/version.env
-# Extract package version from Cargo.toml
-ARG APP_VERSION
-RUN export APP_VERSION=$(cargo pkgid | awk -F# '{print $2}') && echo "Built version: $APP_VERSION"
-
+RUN echo "APP_VERSION=$(cargo pkgid | awk -F# '{print $2}')" > /app/version.env
 
 # =========================
 # Runtime (production)
@@ -72,7 +68,5 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV APP_ENV=production
-ARG APP_VERSION
-ENV APP_VERSION=$APP_VERSION
 
 CMD ["/entrypoint.sh"]

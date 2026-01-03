@@ -8,6 +8,7 @@ use crate::services::status::StatusService;
 use crate::utils::common::BackupMethod;
 use std::sync::Arc;
 use tracing::info;
+use crate::services::restore::RestoreService;
 
 pub struct Agent {
     ctx: Arc<Context>,
@@ -15,7 +16,7 @@ pub struct Agent {
     status_service: StatusService,
     cron_service: CronService,
     backup_service: BackupService,
-    // restore_service: RestoreService,
+    restore_service: RestoreService,
 }
 
 impl Agent {
@@ -23,10 +24,9 @@ impl Agent {
         let config_service = ConfigService::new(ctx.clone());
         let status_service = StatusService::new(ctx.clone());
         let cron_service = CronService::new(ctx.clone()).await;
-        // let backup_service = BackupService::new(ctx.clone()).await;
 
         let backup_service = BackupService::new(ctx.clone());
-        // let restore_service = RestoreService::new(&ctx);
+        let restore_service = RestoreService::new(ctx.clone());
 
         Agent {
             ctx,
@@ -34,7 +34,7 @@ impl Agent {
             status_service,
             cron_service,
             backup_service,
-            // restore_service,
+            restore_service,
         }
     }
 
@@ -55,7 +55,10 @@ impl Agent {
                     .dispatch(&db.generated_id, &config, method.clone())
                     .await;
             } else if db.data.restore.action {
-                // handle restore
+                let _ = self
+                    .restore_service
+                    .dispatch(db, &config)
+                    .await;
             }
         }
 

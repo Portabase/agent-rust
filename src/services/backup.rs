@@ -4,6 +4,7 @@ use crate::core::context::Context;
 use crate::domain::factory::DatabaseFactory;
 use crate::services::config::{DatabaseConfig, DatabasesConfig};
 use crate::utils::common::BackupMethod;
+use crate::utils::file::full_extension;
 use anyhow::Result;
 use hex;
 use log::{error, info};
@@ -71,9 +72,8 @@ impl BackupService {
         }
     }
 
-
     pub async fn run(cfg: DatabaseConfig, tmp_path: &Path) -> Result<BackupResult> {
-        let db_instance = DatabaseFactory::create(cfg.clone());
+        let db_instance = DatabaseFactory::create_for_backup(cfg.clone()).await;
         let generated_id = cfg.generated_id.clone();
         let db_type = cfg.db_type.clone();
 
@@ -156,6 +156,8 @@ impl BackupService {
                     let encrypted_len = encrypter.encrypt(&aes_key, &mut encrypted_key).unwrap();
                     encrypted_key.truncate(encrypted_len);
 
+                    let extension = full_extension(&file_path);
+
                     // Attach file and AES info to multipart form
                     form = form
                         .part(
@@ -164,7 +166,8 @@ impl BackupService {
                                 .file_name(format!("{}.enc", result.generated_id)),
                         )
                         .text("aes_key", hex::encode(encrypted_key))
-                        .text("iv", hex::encode(iv));
+                        .text("iv", hex::encode(iv))
+                        .text("extension", extension);
                 }
                 Err(e) => {
                     error!("Failed to read backup file: {}", e);

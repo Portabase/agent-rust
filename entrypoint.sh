@@ -11,7 +11,7 @@ echo "                                                           /____/         
 
 if [ "$APP_ENV" = "production" ]; then
     if [ -f /app/version.env ]; then
-#        . /app/version.env
+        . /app/version.env
         PROJECT_NAME_VERSION=${APP_VERSION:-production}
     else
         PROJECT_NAME_VERSION="development"

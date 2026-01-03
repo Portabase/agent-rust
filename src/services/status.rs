@@ -93,8 +93,10 @@ impl StatusService {
             })
             .collect();
 
+        let version_str = format!("{}-rust", CONFIG.app_version);
+
         let body = StatusRequestBody {
-            version: CONFIG.app_version.as_str(),
+            version: &version_str,
             databases: databases_payload,
         };
 

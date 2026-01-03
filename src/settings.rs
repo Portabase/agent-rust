@@ -18,7 +18,7 @@ impl Settings {
         dotenv().ok();
 
         Self {
-            app_version: env::var("APP_VERSION").unwrap_or_else(|_| "unknown".into()),
+            app_version: env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "unknown".into()),
             app_env: env::var("APP_ENV").unwrap_or_else(|_| "development".into()),
             redis_url: env::var("CELERY_BROKER_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379/".into()),
