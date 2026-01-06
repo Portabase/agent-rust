@@ -26,7 +26,7 @@ Please take a moment to review this guide. It will help you understand how to co
 
 2. **Clone the repository**
    ```bash
-   git clone https://github.com/Portabase/agent-portabase-rust.git
+   git clone https://github.com/Portabase/agent-rust.git
    ```
 
 3. **Set up the development environment**  
@@ -35,7 +35,7 @@ Please take a moment to review this guide. It will help you understand how to co
 4. **Create a branch**  
    Use the feature branch to work on changes.
    ```bash
-   git checkout -b feature/<feature-name>
+   git checkout -b feature-<feature-name>
    ```
 
 ---
@@ -72,7 +72,7 @@ If you encounter a bug or have a suggestion for improvement, follow these steps:
 
 3. **Push your branch**
    ```bash
-   git push origin feature/<feature-name>
+   git push origin feature-<feature-name>
    ```
 
 4. **Open a Pull Request (PR)**  
