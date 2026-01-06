@@ -22,8 +22,6 @@
 [![Self Hosted](https://img.shields.io/badge/self--hosted-yes-brightgreen)](https://github.com/Portabase/portabase)
 [![Open Source](https://img.shields.io/badge/open%20source-❤️-red)](https://github.com/Portabase/portabase)
 
-Tokyo
-
 [![Rust][Rust]][Rust-url]
 [![Tokio][Tokio]][Tokio-url]
 [![Redis][Redis]][Redis-url]
@@ -63,11 +61,9 @@ You have 4 ways to install Portabase Agent:
 
 Distributed under the Apache License. See `LICENSE.txt` for more information.
 
-
 [Rust]: https://img.shields.io/badge/rust-000000?style=for-the-badge&logo=rust&logoColor=white
 
 [Tokio]: https://img.shields.io/badge/Tokio-09d3ac?style=for-the-badge&logo=tokio&logoColor=white
-
 
 [Docker]: https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff&style=for-the-badge
 
