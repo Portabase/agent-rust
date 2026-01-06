@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: Portabase Agent (Rust)
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Gauthereau
+    given-names: Charles
+  - family-names: Larcher
+    given-names: Killian
+repository-code: https://github.com/Portabase/agent-rust
+url: https://portabase.io
+abstract: "Portabase is a free, open-source, self-hosted solution for database administration, providing backup and restore capabilities, scheduling, retention policies, notifications, and support for multiple storage backends. Its headless agent architecture enables connection to multiple database instances securely and efficiently."
+keywords:
+  - database
+  - administration
+  - backup
+  - restore
+  - scheduling
+  - retention
+  - notifications
+  - open-source
+  - self-hosted
+  - portabase
+license: Apache-2.0
+version: 0.1.0
+date-released: "2026-01-06"
