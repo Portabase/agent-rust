@@ -28,7 +28,6 @@ CURRENT_DATE=$(date +%Y-%m-%d)
 
 echo "Preparing release $VERSION..."
 
-
 # Detect platform for sed
 if sed --version >/dev/null 2>&1; then
   # GNU/Linux
@@ -39,30 +38,23 @@ else
 fi
 
 # Update package.json
-if [ -f package.json ]; then
-  echo "Updating package.json to version $CLEAN_VERSION..."
+[ -f package.json ] && echo "Updating package.json to version $CLEAN_VERSION..." && \
   $SED_INPLACE "s/\"version\": \".*\"/\"version\": \"$CLEAN_VERSION\"/" package.json
-fi
 
 # Update pyproject.toml
-if [ -f pyproject.toml ]; then
-  echo "Updating pyproject.toml to version $CLEAN_VERSION..."
+[ -f pyproject.toml ] && echo "Updating pyproject.toml to version $CLEAN_VERSION..." && \
   $SED_INPLACE "s/^version = \".*\"/version = \"$CLEAN_VERSION\"/" pyproject.toml
-fi
 
 # Update Cargo.toml
-if [ -f Cargo.toml ]; then
-  echo "Updating Cargo.toml to version $CLEAN_VERSION..."
+[ -f Cargo.toml ] && echo "Updating Cargo.toml to version $CLEAN_VERSION..." && \
   $SED_INPLACE "s/^version = \".*\"/version = \"$CLEAN_VERSION\"/" Cargo.toml
-fi
 
-# Update CITATION.cff
+# Update CITATION.cff only if it exists
 if [ -f CITATION.cff ]; then
   echo "Updating CITATION.cff..."
   $SED_INPLACE "s/^version: .*/version: $CLEAN_VERSION/" CITATION.cff
   $SED_INPLACE "s/^date-released: .*/date-released: \"$CURRENT_DATE\"/" CITATION.cff
 fi
-
 
 
 git add .
