@@ -68,7 +68,7 @@ impl PostgresDatabase {
     }
 
     fn get_postgres_server_version(cfg: &DatabaseConfig) -> Result<String, anyhow::Error> {
-        let output = Command::new("/usr/lib/postgresql/17/bin/psql")
+        let output = Command::new("/usr/lib/postgresql/16/bin/psql")
             .arg("-U")
             .arg(&cfg.username)
             .arg("-h")

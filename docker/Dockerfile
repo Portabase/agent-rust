@@ -110,6 +110,16 @@
 FROM rust:1.92.0 AS base
 
 # Install common dependencies
+#RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+#    pkg-config \
+#    libssl-dev \
+#    tzdata \
+#    redis-server \
+#    ca-certificates \
+#    libpq5 \
+#    curl \
+#    && apt-get clean \
+#    && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -117,9 +127,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     redis-server \
     ca-certificates \
     libpq5 \
+    libreadline8 \
+    libncurses6 \
+    zlib1g \
     curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
 
 
 # =========================
@@ -187,8 +201,12 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     tzdata \
     libpq5 \
+    libreadline8 \
+    libncurses6 \
+    zlib1g \
     mariadb-client \
     && rm -rf /var/lib/apt/lists/*
+
 
 WORKDIR /app
 
