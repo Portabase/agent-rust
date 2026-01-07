@@ -5,7 +5,7 @@ type = "postgresql"
 username = "devuser"
 password = "changeme"
 port = 5432
-host = "localhost"
+host = "db"
 generated_id = "16678159-ff7e-4c97-8c83-0adeff214689"
 
 [[databases]]
@@ -15,7 +15,7 @@ type = "postgresql"
 username = "devuser"
 password = "changeme"
 port = 5432
-host = "localhost"
+host = "db"
 generated_id = "16678156-ff7e-4c97-8c83-0adeff214654"
 
 [[databases]]
@@ -25,5 +25,5 @@ type = "mysql"
 username = "mariadb"
 password = "changeme"
 port = 3306
-host = "localhost"
+host = "db1"
 generated_id = "16678124-ff7e-4c97-8c83-0adeff214667"

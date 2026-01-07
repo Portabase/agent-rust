@@ -9,6 +9,7 @@ use flate2::write::GzEncoder;
 use log::info;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::debug;
 
 #[derive(Clone, Copy)]
 pub enum PostgresDumpFormat {
@@ -65,6 +66,50 @@ impl PostgresDatabase {
             _ => PostgresDumpFormat::Fc, // fallback legacy
         }
     }
+
+    fn get_postgres_server_version(cfg: &DatabaseConfig) -> Result<String, anyhow::Error> {
+        let output = Command::new("/usr/lib/postgresql/17/bin/psql")
+            .arg("-U")
+            .arg(&cfg.username)
+            .arg("-h")
+            .arg(&cfg.host)
+            .arg("-p")
+            .arg(cfg.port.to_string())
+            .arg("-d")
+            .arg(&cfg.database)
+            .arg("-t") // only return value
+            .arg("-c")
+            .arg("SHOW server_version;")
+            .env("PGPASSWORD", &cfg.password)
+            .output()?;
+
+        if !output.status.success() {
+            anyhow::bail!("Failed to get PostgreSQL version");
+        }
+
+        let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        let major_version: u32 = version_str
+            .split('.')
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Cannot parse PostgreSQL version"))?
+            .parse()
+            .map_err(|_| anyhow::anyhow!("Failed to parse PostgreSQL major version"))?;
+
+        if !(12..=18).contains(&major_version) {
+            anyhow::bail!(
+                "PostgreSQL version {} not supported, must be between 12 and 18",
+                major_version
+            );
+        }
+
+        Ok(version_str)
+    }
+
+    fn select_pg_path(version: &str) -> PathBuf {
+        let major = version.split('.').next().unwrap_or("17"); // default to 17
+        PathBuf::from(format!("/usr/lib/postgresql/{}/bin", major))
+    }
 }
 
 #[async_trait]
@@ -77,11 +122,19 @@ impl Database for PostgresDatabase {
     }
 
     async fn ping(&self) -> Result<bool> {
+        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg)?;
+        let pg_path = PostgresDatabase::select_pg_path(&server_version);
+        let pg_isready_path = format!("{}/pg_isready", pg_path.display());
+
+        debug!("Server version: {}", server_version);
+        debug!("pg_isready_path: {}", pg_isready_path);
+
         let url = format!(
             "postgresql://{}:{}@{}:{}/{}",
             self.cfg.username, self.cfg.password, self.cfg.host, self.cfg.port, self.cfg.database
         );
-        let status = Command::new("pg_isready")
+
+        let status = Command::new(pg_isready_path)
             .arg("--dbname")
             .arg(url)
             .status()
@@ -90,6 +143,13 @@ impl Database for PostgresDatabase {
     }
 
     async fn backup(&self, backup_dir: &Path) -> Result<PathBuf> {
+        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg)?;
+        let pg_path = PostgresDatabase::select_pg_path(&server_version);
+        let pg_dump_path = format!("{}/pg_dump", pg_path.display());
+
+        debug!("Server version: {}", server_version);
+        debug!("pg_dump_path: {}", pg_dump_path);
+
         match self.format {
             PostgresDumpFormat::Fc => {
                 let file_path = backup_dir.join(format!(
@@ -105,7 +165,7 @@ impl Database for PostgresDatabase {
                     self.cfg.port,
                     self.cfg.database
                 );
-                let status = Command::new("pg_dump")
+                let status = Command::new(pg_dump_path)
                     .arg("--dbname")
                     .arg(url)
                     .arg("-Fc")
@@ -158,6 +218,15 @@ impl Database for PostgresDatabase {
     }
 
     async fn restore(&self, restore_file: &Path) -> Result<()> {
+        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg)?;
+        let pg_path = PostgresDatabase::select_pg_path(&server_version);
+        let pg_restore_path = format!("{}/pg_restore", pg_path.display());
+        let psql_path = format!("{}/psql", pg_path.display());
+
+        debug!("Server version: {}", server_version);
+        debug!("pg_restore_path: {}", pg_restore_path);
+        debug!("psql_path: {}", psql_path);
+
         let url = format!(
             "postgresql://{}:{}@{}:{}/{}",
             self.cfg.username, self.cfg.password, self.cfg.host, self.cfg.port, "postgres"
@@ -168,7 +237,7 @@ impl Database for PostgresDatabase {
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{}' AND pid<>pg_backend_pid();",
             self.cfg.database
         );
-        Command::new("psql")
+        Command::new(psql_path)
             .arg("-U")
             .arg(&self.cfg.username)
             .arg("-d")
@@ -184,7 +253,7 @@ impl Database for PostgresDatabase {
 
         match self.format {
             PostgresDumpFormat::Fc => {
-                let status = Command::new("pg_restore")
+                let status = Command::new(pg_restore_path)
                     .arg("--no-owner")
                     .arg("--no-privileges")
                     .arg("--clean")
@@ -210,7 +279,7 @@ impl Database for PostgresDatabase {
                 let dump_dir = tmp_dir.path();
 
                 info!("Restoring dump from {}", dump_dir.display());
-                let status = Command::new("pg_restore")
+                let status = Command::new(pg_restore_path)
                     .arg("--no-owner")
                     .arg("--no-privileges")
                     .arg("--clean")
