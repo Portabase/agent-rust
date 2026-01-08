@@ -24,7 +24,7 @@ impl Settings {
                 .unwrap_or_else(|_| "redis://localhost:6379/".into()),
             edge_key: env::var("EDGE_KEY").unwrap_or_default(),
             databases_config_file: env::var("DATABASES_CONFIG_FILE")
-                .unwrap_or_else(|_| "config.toml".into()),
+                .unwrap_or_else(|_| "config.json".into()),
             data_path: env::var("DATA_PATH").unwrap_or_else(|_| "/config".into()),
         }
     }

@@ -9,6 +9,7 @@ use log::info;
 use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use std::sync::Arc;
+use tracing::error;
 
 pub async fn scheduler_loop(mut conn: MultiplexedConnection) {
     loop {
@@ -36,7 +37,14 @@ pub async fn scheduler_loop(mut conn: MultiplexedConnection) {
                     task_clone.task, task_clone.args
                 );
 
-                let _ = execute_task(task_clone.task.as_str(), task_clone.args).await;
+                // let _ = execute_task(task_clone.task.as_str(), task_clone.args).await;
+
+                if let Err(e) = execute_task(task_clone.task.as_str(), task_clone.args).await {
+                    error!(
+                        "An error occurred while executing task={} : {:?}",
+                        task_clone.task, e
+                    );
+                }
 
                 let next_ts = next_run_timestamp(&task_clone.cron);
                 let _: () = conn_clone.zadd(SCHEDULE_KEY, &key, next_ts).await.unwrap();

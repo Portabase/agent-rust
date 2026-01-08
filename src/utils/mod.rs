@@ -4,3 +4,4 @@ pub mod redis_client;
 pub mod task_manager;
 pub mod text;
 pub mod file;
+pub mod locks;

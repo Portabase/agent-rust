@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 
-use crate::domain::postgres::PostgresDatabase;
 use crate::services::config::DatabaseConfig;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use crate::domain::mysql::MySQLDatabase;
+use crate::domain::postgres::database::PostgresDatabase;
+use crate::domain::postgres::{detect_format_from_file, detect_format_from_size};
 
 #[async_trait::async_trait]
 pub trait Database: Send + Sync {
@@ -22,7 +23,7 @@ impl DatabaseFactory {
     pub async fn create_for_backup(cfg: DatabaseConfig) -> Arc<dyn Database> {
         match cfg.db_type.as_str() {
             "postgresql" => {
-                let format = PostgresDatabase::detect_format_from_size(&cfg).await;
+                let format = detect_format_from_size(&cfg).await;
                 Arc::new(PostgresDatabase::new(cfg, format))
             }
             "mysql" => Arc::new(MySQLDatabase::new(cfg)),
@@ -33,7 +34,7 @@ impl DatabaseFactory {
     pub async fn create_for_restore(cfg: DatabaseConfig, restore_file: &Path) -> Arc<dyn Database> {
         match cfg.db_type.as_str() {
             "postgresql" => {
-                let format = PostgresDatabase::detect_format_from_file(restore_file);
+                let format = detect_format_from_file(restore_file);
                 Arc::new(PostgresDatabase::new(cfg, format))
             }
             "mysql" => Arc::new(MySQLDatabase::new(cfg)),

@@ -1,0 +1,34 @@
+{
+  "databases": [
+    {
+      "name": "Test database 1 - rust",
+      "database": "devdb",
+      "type": "postgresql",
+      "username": "devuser",
+      "password": "changeme",
+      "port": 5432,
+      "host": "db",
+      "generated_id": "16678159-ff7e-4c97-8c83-0adeff214681"
+    },
+    {
+      "name": "Test database 2 - rust",
+      "database": "devdb",
+      "type": "postgresql",
+      "username": "devuser",
+      "password": "changeme",
+      "port": 5432,
+      "host": "db",
+      "generated_id": "16678156-ff7e-4c97-8c83-0adeff214681"
+    },
+    {
+      "name": "Test database 3 - rust",
+      "database": "mariadb",
+      "type": "mysql",
+      "username": "mariadb",
+      "password": "changeme",
+      "port": 3306,
+      "host": "db2",
+      "generated_id": "16678124-ff7e-4c97-8c83-0adeff214681"
+    }
+  ]
+}

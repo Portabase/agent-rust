@@ -26,6 +26,7 @@ pub struct BackupResult {
     pub db_type: String,
     pub status: String,
     pub backup_file: Option<PathBuf>,
+    pub code: Option<String>,
 }
 
 pub struct BackupService {
@@ -85,6 +86,7 @@ impl BackupService {
                 db_type,
                 status: "failed".into(),
                 backup_file: None,
+                code: None,
             });
         }
 
@@ -94,17 +96,37 @@ impl BackupService {
                 db_type,
                 status: "success".into(),
                 backup_file: Some(file),
+                code: None,
             }),
-            Err(_) => Ok(BackupResult {
-                generated_id,
-                db_type,
-                status: "failed".into(),
-                backup_file: None,
-            }),
+            Err(e) => match e.to_string().as_str() {
+                "backup_already_in_progress" => Ok(BackupResult {
+                    generated_id,
+                    db_type,
+                    status: "failed".into(),
+                    backup_file: None,
+                    code: Some(e.to_string()),
+                }),
+                _ => Ok(BackupResult {
+                    generated_id,
+                    db_type,
+                    status: "failed".into(),
+                    backup_file: None,
+                    code: None,
+                }),
+            },
         }
     }
 
     pub async fn send_result(&self, result: BackupResult, method: BackupMethod) {
+
+        if result.code.as_deref() == Some("backup_already_in_progress") {
+            info!(
+            "[BackupService] Skipping send for DB {}: backup already in progress",
+            result.generated_id
+        );
+            return;
+        }
+
         info!(
             "[BackupService] DB: {} Type: {} Status: {} File: {:?}",
             result.generated_id, result.db_type, result.status, result.backup_file

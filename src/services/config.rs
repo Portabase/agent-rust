@@ -55,7 +55,7 @@ impl ConfigService {
         let path_obj = Path::new(&path);
 
         if !path_obj.exists() {
-            return Err(format!("Config file not found: {}", &path));
+            return Err(format!("Config file not found: {}, check documentation and add config file.", &path));
         }
 
         let extension = path_obj

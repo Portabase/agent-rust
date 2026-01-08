@@ -1,78 +1,11 @@
-// use crate::utils::task_manager::models;
-// use crate::utils::task_manager::tasks::{remove_task, upsert_task};
-// use crate::utils::text::normalize_cron;
-// use chrono::Utc;
-// use cron::Schedule;
-// use log::debug;
-// use redis::Commands;
-// use std::str::FromStr;
-// use tracing::info;
-// 
-// pub fn next_run_timestamp(expr: &str) -> i64 {
-//     let schedule = Schedule::from_str(expr).unwrap();
-//     schedule.upcoming(Utc).next().unwrap().timestamp()
-// }
-// 
-// pub fn check_and_update_cron(
-//     conn: &mut redis::aio::MultiplexedConnection,
-//     cron_value: Option<String>,
-//     args: Vec<String>,
-//     task: &str,
-//     task_name: String,
-// ) {
-//     let redis_key = format!("redbeat:{}", task_name);
-// 
-//     let exists: bool = conn.exists(&redis_key).unwrap();
-// 
-//     match cron_value {
-//         None => {
-//             if exists {
-//                 remove_task(conn, &task_name).unwrap();
-//                 info!("Task {} removed", task_name);
-//             }
-//         }
-// 
-//         Some(cron) => {
-//             let cron = normalize_cron(&cron);
-//             debug!("Task cron (normalized): {:?}", cron);
-//             
-//             if exists {
-//                 let raw: String = conn.hget(&redis_key, "data").unwrap();
-//                 let stored: models::PeriodicTask = serde_json::from_str(&raw).unwrap();
-// 
-//                 if stored.cron != cron {
-//                     upsert_task(
-//                         conn,
-//                         &task_name,
-//                         task,
-//                         &cron,
-//                         args,
-//                     )
-//                     .unwrap();
-//                     info!("Task {} updated", task_name);
-//                 }
-//             } else {
-//                 upsert_task(
-//                     conn,
-//                     &task_name,
-//                     task,
-//                     &cron,
-//                     args,
-//                 )
-//                 .unwrap();
-//                 info!("Task {} created", task_name);
-//             }
-//         }
-//     }
-// }
 use crate::utils::task_manager::models;
 use crate::utils::task_manager::tasks::{remove_task, upsert_task};
 use crate::utils::text::normalize_cron;
 use chrono::Utc;
 use cron::Schedule;
 use log::debug;
-use redis::aio::MultiplexedConnection;
 use redis::AsyncCommands;
+use redis::aio::MultiplexedConnection;
 use std::str::FromStr;
 use tracing::info;
 

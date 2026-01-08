@@ -65,6 +65,8 @@ impl RestoreService {
     ) -> Result<RestoreResult> {
         let generated_id = cfg.generated_id.clone();
 
+        info!("File url: {}", file_url);
+
         let client = reqwest::Client::new();
         let response = client.get(file_url).send().await?;
         if !response.status().is_success() {
