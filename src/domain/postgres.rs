@@ -2,13 +2,14 @@
 
 use crate::domain::factory::Database;
 use crate::services::config::DatabaseConfig;
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use log::info;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tokio_postgres::{Client, NoTls};
 use tracing::debug;
 
 #[derive(Clone, Copy)]
@@ -37,58 +38,60 @@ impl PostgresDatabase {
     }
 
     pub async fn detect_format_from_size(cfg: &DatabaseConfig) -> PostgresDumpFormat {
-        let url = format!(
+        info!(
+            "Detecting database format {:?} - {:?}",
+            cfg.name, cfg.generated_id
+        );
+        let client = match PostgresDatabase::connect(cfg).await {
+            Ok(c) => c,
+            Err(_) => return PostgresDumpFormat::Fc,
+        };
+
+        let row = match client
+            .query_one("SELECT pg_database_size(current_database());", &[])
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return PostgresDumpFormat::Fc,
+        };
+
+        let size_bytes: i64 = row.get(0);
+        info!("Size of database is {} bytes", size_bytes);
+
+        // > 1 Go
+        if size_bytes > 1_000_000_000 {
+            info!("Using -Fd format");
+            PostgresDumpFormat::Fd
+        } else {
+            info!("Using -Fc format");
+            PostgresDumpFormat::Fc
+        }
+    }
+
+    async fn connect(cfg: &DatabaseConfig) -> anyhow::Result<Client> {
+        let dsn = format!(
             "host={} port={} user={} password={} dbname={}",
             cfg.host, cfg.port, cfg.username, cfg.password, cfg.database
         );
 
-        let output = std::process::Command::new("psql")
-            .arg(&url)
-            .arg("-t")
-            .arg("-c")
-            .arg("SELECT pg_database_size(current_database());")
-            .output();
-
-        match output {
-            Ok(out) if out.status.success() => {
-                let size_bytes: i64 = String::from_utf8_lossy(&out.stdout)
-                    .trim()
-                    .parse()
-                    .unwrap_or(0);
-
-                // > 1 Go
-                if size_bytes > 1_000_000_000 {
-                    PostgresDumpFormat::Fd
-                } else {
-                    PostgresDumpFormat::Fc
-                }
+        let (client, connection) = tokio_postgres::connect(&dsn, NoTls).await?;
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                tracing::error!("Postgres connection error: {}", e);
             }
-            _ => PostgresDumpFormat::Fc, // fallback legacy
-        }
+        });
+
+        Ok(client)
     }
 
-    fn get_postgres_server_version(cfg: &DatabaseConfig) -> Result<String, anyhow::Error> {
-        let output = Command::new("/usr/lib/postgresql/16/bin/psql")
-            .arg("-U")
-            .arg(&cfg.username)
-            .arg("-h")
-            .arg(&cfg.host)
-            .arg("-p")
-            .arg(cfg.port.to_string())
-            .arg("-d")
-            .arg(&cfg.database)
-            .arg("-t") // only return value
-            .arg("-c")
-            .arg("SHOW server_version;")
-            .env("PGPASSWORD", &cfg.password)
-            .output()?;
+    async fn get_postgres_server_version(cfg: &DatabaseConfig) -> anyhow::Result<String> {
+        let client = Self::connect(cfg).await?;
 
-        if !output.status.success() {
-            anyhow::bail!("Failed to get PostgreSQL version");
-        }
+        // Query the version string
+        let row = client.query_one("SHOW server_version;", &[]).await?;
+        let version_str: String = row.get(0);
 
-        let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
+        // Parse the major version
         let major_version: u32 = version_str
             .split('.')
             .next()
@@ -110,6 +113,27 @@ impl PostgresDatabase {
         let major = version.split('.').next().unwrap_or("17"); // default to 17
         PathBuf::from(format!("/usr/lib/postgresql/{}/bin", major))
     }
+
+    async fn terminate_connections(cfg: &DatabaseConfig) -> anyhow::Result<()> {
+        let mut admin_cfg = cfg.clone();
+        admin_cfg.database = "postgres".to_string();
+
+        let client = Self::connect(&admin_cfg).await?;
+
+        client
+            .execute(
+                "
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = $1
+          AND pid <> pg_backend_pid();
+        ",
+                &[&cfg.database],
+            )
+            .await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -121,34 +145,35 @@ impl Database for PostgresDatabase {
         }
     }
 
+    // async fn ping(&self) -> Result<bool> {
+    //     let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg).await?;
+    //     let pg_path = PostgresDatabase::select_pg_path(&server_version.to_string());
+    //     let pg_isready_path = format!("{}/pg_isready", pg_path.display());
+    //
+    //     debug!("Server version: {} -> {}", server_version, pg_isready_path);
+    //
+    //     let url = format!(
+    //         "postgresql://{}:{}@{}:{}/{}",
+    //         self.cfg.username, self.cfg.password, self.cfg.host, self.cfg.port, self.cfg.database
+    //     );
+    //
+    //     let status = Command::new(pg_isready_path)
+    //         .arg("--dbname")
+    //         .arg(url)
+    //         .status()
+    //         .context("Failed to ping Postgres")?;
+    //     Ok(status.success())
+    // }
     async fn ping(&self) -> Result<bool> {
-        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg)?;
-        let pg_path = PostgresDatabase::select_pg_path(&server_version);
-        let pg_isready_path = format!("{}/pg_isready", pg_path.display());
-
-        debug!("Server version: {}", server_version);
-        debug!("pg_isready_path: {}", pg_isready_path);
-
-        let url = format!(
-            "postgresql://{}:{}@{}:{}/{}",
-            self.cfg.username, self.cfg.password, self.cfg.host, self.cfg.port, self.cfg.database
-        );
-
-        let status = Command::new(pg_isready_path)
-            .arg("--dbname")
-            .arg(url)
-            .status()
-            .context("Failed to ping Postgres")?;
-        Ok(status.success())
+        Ok(Self::connect(&self.cfg).await.is_ok())
     }
 
     async fn backup(&self, backup_dir: &Path) -> Result<PathBuf> {
-        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg)?;
-        let pg_path = PostgresDatabase::select_pg_path(&server_version);
+        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg).await?;
+        let pg_path = PostgresDatabase::select_pg_path(&server_version.to_string());
         let pg_dump_path = format!("{}/pg_dump", pg_path.display());
 
-        debug!("Server version: {}", server_version);
-        debug!("pg_dump_path: {}", pg_dump_path);
+        debug!("Server version: {} -> {}", server_version, pg_dump_path);
 
         match self.format {
             PostgresDumpFormat::Fc => {
@@ -192,7 +217,7 @@ impl Database for PostgresDatabase {
                     self.cfg.port,
                     self.cfg.database
                 );
-                let status = Command::new("pg_dump")
+                let status = Command::new(pg_dump_path)
                     .arg("--dbname")
                     .arg(url)
                     .arg("-Fd")
@@ -218,38 +243,19 @@ impl Database for PostgresDatabase {
     }
 
     async fn restore(&self, restore_file: &Path) -> Result<()> {
-        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg)?;
-        let pg_path = PostgresDatabase::select_pg_path(&server_version);
+        info!("Restoring database \"{}\"", self.cfg.database);
+        let server_version = PostgresDatabase::get_postgres_server_version(&self.cfg).await?;
+        let pg_path = PostgresDatabase::select_pg_path(&server_version.to_string());
         let pg_restore_path = format!("{}/pg_restore", pg_path.display());
-        let psql_path = format!("{}/psql", pg_path.display());
 
-        debug!("Server version: {}", server_version);
-        debug!("pg_restore_path: {}", pg_restore_path);
-        debug!("psql_path: {}", psql_path);
+        debug!("Server version: {} -> {}", server_version, pg_restore_path);
 
         let url = format!(
             "postgresql://{}:{}@{}:{}/{}",
             self.cfg.username, self.cfg.password, self.cfg.host, self.cfg.port, "postgres"
         );
 
-        // Terminate connections
-        let terminate_cmd = format!(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{}' AND pid<>pg_backend_pid();",
-            self.cfg.database
-        );
-        Command::new(psql_path)
-            .arg("-U")
-            .arg(&self.cfg.username)
-            .arg("-d")
-            .arg("postgres")
-            .arg("-h")
-            .arg(&self.cfg.host)
-            .arg("-p")
-            .arg(self.cfg.port.to_string())
-            .arg("-c")
-            .arg(&terminate_cmd)
-            .env("PGPASSWORD", &self.cfg.password)
-            .status()?;
+        PostgresDatabase::terminate_connections(&self.cfg).await?;
 
         match self.format {
             PostgresDumpFormat::Fc => {
