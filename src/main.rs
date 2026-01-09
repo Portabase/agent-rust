@@ -6,14 +6,15 @@ mod tasks;
 mod utils;
 
 use crate::tasks::ping::ping_server;
-use tracing_subscriber;
+use crate::utils::locks::FileLock;
 use utils::redis_client;
 use utils::task_manager::scheduler;
-use crate::utils::locks::FileLock;
+use crate::utils::logging;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+
+    logging::init_logger();
 
     // Remove all locks on startup
     if let Err(e) = FileLock::clean_startup().await {

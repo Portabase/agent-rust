@@ -5,3 +5,4 @@ pub mod task_manager;
 pub mod text;
 pub mod file;
 pub mod locks;
+pub mod logging;

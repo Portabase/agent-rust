@@ -86,7 +86,7 @@ impl StatusService {
             .iter()
             .map(|db| DatabasePayload {
                 name: &db.name,
-                dbms: &db.db_type,
+                dbms: &db.db_type.as_str(),
                 generated_id: &db.generated_id,
             })
             .collect();

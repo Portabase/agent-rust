@@ -1,5 +1,6 @@
 use crate::core::agent::Agent;
 use crate::core::context::Context;
+use crate::settings::CONFIG;
 use crate::utils::common::BackupMethod;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,9 +20,7 @@ pub async fn ping_server() {
             );
         }
 
-
-        // tokio::time::sleep(Duration::from_secs(60)).await;
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        tokio::time::sleep(Duration::from_secs(CONFIG.pooling as u64)).await;
     }
 }
 // use crate::core::agent::Agent;

@@ -5,7 +5,7 @@ use crate::domain::factory::DatabaseFactory;
 use crate::services::config::{DatabaseConfig, DatabasesConfig};
 use crate::services::status::DatabaseStatus;
 use anyhow::Result;
-use log::{error, info};
+use tracing::{error, info};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Arc;

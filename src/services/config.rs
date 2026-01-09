@@ -10,13 +10,34 @@ use std::sync::Arc;
 use toml;
 use tracing::info;
 
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum DbType {
+    Mysql,
+    Mariadb,
+    Postgresql,
+    // Sqlite,
+    // Add other DB types if needed
+}
+
+impl DbType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DbType::Mysql => "mysql",
+            DbType::Mariadb => "mysql",
+            DbType::Postgresql => "postgresql",
+            // DbType::Sqlite => "sqlite",
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct DatabaseConfig {
     pub name: String,
     pub database: String,
     #[serde(rename = "type")]
-    pub db_type: String,
+    pub db_type: DbType,
     pub username: String,
     pub password: String,
     pub port: u16,
@@ -55,7 +76,10 @@ impl ConfigService {
         let path_obj = Path::new(&path);
 
         if !path_obj.exists() {
-            return Err(format!("Config file not found: {}, check documentation and add config file.", &path));
+            return Err(format!(
+                "Config file not found: {}, check documentation and add config file.",
+                &path
+            ));
         }
 
         let extension = path_obj

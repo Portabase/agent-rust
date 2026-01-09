@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use std::path::PathBuf;
 use std::process::Command;
 

@@ -3,7 +3,7 @@ use crate::utils::task_manager::tasks::{remove_task, upsert_task};
 use crate::utils::text::normalize_cron;
 use chrono::Utc;
 use cron::Schedule;
-use log::debug;
+use tracing::debug;
 use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use std::str::FromStr;

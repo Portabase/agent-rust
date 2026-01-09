@@ -2,12 +2,12 @@
 
 use crate::core::context::Context;
 use crate::domain::factory::DatabaseFactory;
-use crate::services::config::{DatabaseConfig, DatabasesConfig};
+use crate::services::config::{DatabaseConfig, DatabasesConfig, DbType};
 use crate::utils::common::BackupMethod;
 use crate::utils::file::full_extension;
 use anyhow::Result;
 use hex;
-use log::{error, info};
+use tracing::{error, info};
 use openssl::encrypt::Encrypter;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
@@ -23,7 +23,7 @@ use tokio::fs;
 #[derive(Debug)]
 pub struct BackupResult {
     pub generated_id: String,
-    pub db_type: String,
+    pub db_type: DbType,
     pub status: String,
     pub backup_file: Option<PathBuf>,
     pub code: Option<String>,
@@ -118,18 +118,20 @@ impl BackupService {
     }
 
     pub async fn send_result(&self, result: BackupResult, method: BackupMethod) {
-
         if result.code.as_deref() == Some("backup_already_in_progress") {
             info!(
-            "[BackupService] Skipping send for DB {}: backup already in progress",
-            result.generated_id
-        );
+                "[BackupService] Skipping send for DB {}: backup already in progress",
+                result.generated_id
+            );
             return;
         }
 
         info!(
             "[BackupService] DB: {} Type: {} Status: {} File: {:?}",
-            result.generated_id, result.db_type, result.status, result.backup_file
+            result.generated_id,
+            result.db_type.as_str(),
+            result.status,
+            result.backup_file
         );
 
         let client = reqwest::Client::new();

@@ -11,11 +11,21 @@ pub struct Settings {
     pub edge_key: String,
     pub databases_config_file: String,
     pub data_path: String,
+    pub pooling: usize,
+    pub timezone: String,
+    pub log: String,
 }
 
 impl Settings {
     fn from_env() -> Self {
         dotenv().ok();
+
+        let pooling_seconds = env::var("POOLING")
+            .unwrap_or_else(|_| "5".to_string())
+            .parse::<usize>()
+            .expect("POOLING must be a valid positive integer");
+
+        let tz = env::var("TZ").unwrap_or_else(|_| "UTC".to_string());
 
         Self {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -26,6 +36,9 @@ impl Settings {
             databases_config_file: env::var("DATABASES_CONFIG_FILE")
                 .unwrap_or_else(|_| "config.json".into()),
             data_path: env::var("DATA_PATH").unwrap_or_else(|_| "/config".into()),
+            pooling: pooling_seconds,
+            timezone: tz,
+            log: env::var("LOG").unwrap_or_else(|_| "info".into()),
         }
     }
 }

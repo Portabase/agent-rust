@@ -5,7 +5,7 @@ use crate::utils::common::BackupMethod;
 use crate::utils::task_manager::cron::next_run_timestamp;
 use crate::utils::task_manager::models::PeriodicTask;
 use crate::utils::task_manager::tasks::SCHEDULE_KEY;
-use log::info;
+use tracing::info;
 use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use std::sync::Arc;
