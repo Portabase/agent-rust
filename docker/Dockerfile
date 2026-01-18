@@ -45,8 +45,28 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     chmod +x /usr/lib/postgresql/*/bin/*
 
 
-
-
+# =========================
+# MongoDB client binaries
+# =========================
+RUN apt-get update && \
+    if [ "$TARGETARCH" = "amd64" ]; then \
+        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.10.0.deb \
+            -O /tmp/mongodb-database-tools.deb; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-arm64-100.10.0.deb \
+            -O /tmp/mongodb-database-tools.deb; \
+    fi && \
+    dpkg -i /tmp/mongodb-database-tools.deb || \
+        apt-get install -f -y --no-install-recommends && \
+    rm -f /tmp/mongodb-database-tools.deb && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /usr/local/mongodb/bin && \
+    if [ -f /usr/bin/mongodump ]; then \
+        ln -sf /usr/bin/mongodump /usr/local/mongodb/bin/mongodump; \
+    fi && \
+    if [ -f /usr/bin/mongorestore ]; then \
+        ln -sf /usr/bin/mongorestore /usr/local/mongodb/bin/mongorestore; \
+    fi
 
 WORKDIR /app
 

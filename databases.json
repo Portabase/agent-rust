@@ -29,6 +29,26 @@
       "port": 3306,
       "host": "db2",
       "generated_id": "16678124-ff7e-4c97-8c83-0adeff214681"
+    },
+    {
+      "name": "Test database 4 - rust",
+      "database": "testdbauth",
+      "type": "mongodb",
+      "username": "root",
+      "password": "rootpassword",
+      "port": 27017,
+      "host": "mongodb-auth",
+      "generated_id": "16678145-ff7e-4c97-8c83-0adeff214681"
+    },
+    {
+      "name": "Test database 5 - rust",
+      "database": "testdb",
+      "type": "mongodb",
+      "username": "",
+      "password": "",
+      "port": 27017,
+      "host": "mongodb",
+      "generated_id": "16678147-ff7e-4c97-8c83-0adeff214681"
     }
   ]
 }
