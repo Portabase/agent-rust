@@ -3,5 +3,5 @@
 /src/data/
 
 .DS_Store
-
+Cargo.lock
 .env
