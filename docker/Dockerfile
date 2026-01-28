@@ -271,6 +271,36 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+
+# =========================
+# PostgreSQL client binaries (versions 12-18)
+# =========================
+RUN for v in 12 13 14 15 16 17 18; do mkdir -p /usr/lib/postgresql/$v/bin; done
+
+COPY assets/tools/amd64/postgresql/ /tmp/pg-x64/
+COPY assets/tools/arm64/postgresql/ /tmp/pg-arm/
+
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        for v in 12 13 14 15 16 17 18; do \
+            cp -r /tmp/pg-x64/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
+        done; \
+    else \
+        for v in 12 13 14 15 16 17 18; do \
+            cp -r /tmp/pg-arm/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
+        done; \
+    fi && \
+    rm -rf /tmp/pg-x64 /tmp/pg-arm && \
+    chmod +x /usr/lib/postgresql/*/bin/*
+
+# =========================
+# MongoDB client binaries
+# =========================
+COPY assets/tools/${TARGETARCH}/mongodb/ /usr/local/mongodb/
+RUN chmod +x /usr/local/mongodb/bin/*
+
+
+
+
 WORKDIR /app
 
 # =========================
