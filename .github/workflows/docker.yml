@@ -193,7 +193,6 @@
 #            docker manifest push ${{ inputs.image_name }}:latest
 #          fi
 
-
 name: Docker Publish
 
 on:
@@ -260,14 +259,21 @@ jobs:
           tags: ${{ steps.set-tags.outputs.image }}
           target: ${{ inputs.target }}
 
-      - name: Upload image tag for manifest
-        id: upload
-        run: echo "${{ steps.set-tags.outputs.image }}" > image.txt
+      - name: Prepare artifact name
+        id: artifact
+        run: |
+          platform=${{ matrix.platform }}
+          echo "safe_platform=${platform//\//-}" >> $GITHUB_OUTPUT
+          echo "${{ steps.set-tags.outputs.image }}" > image.txt
 
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: image-${{ matrix.platform }}
+          name: image-${{ steps.artifact.outputs.safe_platform }}
           path: image.txt
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
 
   create-manifest:
     name: Create multi-arch Docker manifest
@@ -276,13 +282,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
-          name: image-linux/amd64
-          path: /tmp/digests
+          name: image-linux-amd64
+          path: /tmp/digests/amd64
 
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
-          name: image-linux/arm64
-          path: /tmp/digests
+          name: image-linux-arm64
+          path: /tmp/digests/arm64
 
       - name: Login to Docker
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
@@ -292,8 +298,8 @@ jobs:
 
       - name: Create and push manifest
         run: |
-          AMD64_IMAGE=$(cat /tmp/digests/image-linux/amd64/image.txt)
-          ARM64_IMAGE=$(cat /tmp/digests/image-linux/arm64/image.txt)
+          AMD64_IMAGE=$(cat /tmp/digests/amd64/image.txt)
+          ARM64_IMAGE=$(cat /tmp/digests/arm64/image.txt)
           REF_NAME=${GITHUB_REF#refs/tags/}
           MANIFEST_IMAGE="${{ inputs.image_name }}:$REF_NAME"
 
