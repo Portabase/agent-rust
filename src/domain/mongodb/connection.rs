@@ -12,13 +12,12 @@ pub async fn connect(cfg: DatabaseConfig) -> Result<Client> {
 }
 
 pub fn select_mongo_path() -> std::path::PathBuf {
-    "/usr/local/mongodb/bin".to_string().into()
+    "/usr/bin".to_string().into()
 }
 
 pub fn get_mongo_uri(cfg: DatabaseConfig) -> String {
     if cfg.username.is_empty() {
         format!("mongodb://{}:{}/{}", cfg.host, cfg.port, cfg.database)
-
     } else {
         format!(
             "mongodb://{}:{}@{}:{}/{}?authSource=admin",
