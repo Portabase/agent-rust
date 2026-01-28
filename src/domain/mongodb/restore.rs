@@ -1,4 +1,4 @@
-use crate::domain::mongodb::connection::{get_mongo_uri, select_mongo_path};
+use crate::domain::mongodb::connection::{get_mongo_uri};
 use crate::services::config::DatabaseConfig;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -9,10 +9,9 @@ pub async fn run(cfg: DatabaseConfig, restore_file: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
         debug!("Starting MongoDB restore for database {}", cfg.name);
 
-        let mongorestore = select_mongo_path().join("mongorestore");
         let uri = get_mongo_uri(cfg.clone());
 
-        let output = Command::new(mongorestore)
+        let output = Command::new("mongorestore")
             .arg(format!("--uri={}", uri))
             .arg(format!("--archive={}", restore_file.display()))
             .arg("--gzip")

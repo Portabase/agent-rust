@@ -46,27 +46,15 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 
 
 # =========================
-# MongoDB client binaries
+# MongoDB Database Tools
 # =========================
-RUN apt-get update && \
-    if [ "$TARGETARCH" = "amd64" ]; then \
-        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.10.0.deb \
-            -O /tmp/mongodb-database-tools.deb; \
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
-        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-arm64-100.10.0.deb \
-            -O /tmp/mongodb-database-tools.deb; \
+        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-arm64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
     fi && \
-    dpkg -i /tmp/mongodb-database-tools.deb || \
-        apt-get install -f -y --no-install-recommends && \
-    rm -f /tmp/mongodb-database-tools.deb && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /usr/local/mongodb/bin && \
-    if [ -f /usr/bin/mongodump ]; then \
-        ln -sf /usr/bin/mongodump /usr/local/mongodb/bin/mongodump; \
-    fi && \
-    if [ -f /usr/bin/mongorestore ]; then \
-        ln -sf /usr/bin/mongorestore /usr/local/mongodb/bin/mongorestore; \
-    fi
+    apt-get update && apt-get install -y /tmp/mongodb-tools.deb && \
+    rm -f /tmp/mongodb-tools.deb && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -115,6 +103,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-arm64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
+    fi && \
+    apt-get update && apt-get install -y /tmp/mongodb-tools.deb && \
+    rm -f /tmp/mongodb-tools.deb && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=builder /app/target/release/app /usr/local/bin/app
@@ -123,8 +119,6 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 COPY --from=base /usr/lib/postgresql/ /usr/lib/postgresql/
-COPY --from=base /usr/bin/mongodump /usr/local/bin/mongodump
-COPY --from=base /usr/bin/mongorestore /usr/local/bin/mongorestore
 
 ENV APP_ENV=production
 

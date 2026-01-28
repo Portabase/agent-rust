@@ -11,9 +11,6 @@ pub async fn connect(cfg: DatabaseConfig) -> Result<Client> {
     Ok(client)
 }
 
-pub fn select_mongo_path() -> std::path::PathBuf {
-    "/usr/bin".to_string().into()
-}
 
 pub fn get_mongo_uri(cfg: DatabaseConfig) -> String {
     if cfg.username.is_empty() {

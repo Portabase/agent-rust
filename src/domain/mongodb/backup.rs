@@ -1,4 +1,4 @@
-use crate::domain::mongodb::connection::{get_mongo_uri, select_mongo_path};
+use crate::domain::mongodb::connection::{get_mongo_uri};
 use crate::services::config::DatabaseConfig;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -14,10 +14,9 @@ pub async fn run(
         debug!("Starting MongoDB backup for database {}", cfg.name);
 
         let file_path = backup_dir.join(format!("{}{}", cfg.generated_id, file_extension));
-        let mongodump = select_mongo_path().join("mongodump");
         let uri = get_mongo_uri(cfg.clone());
 
-        let output = Command::new(mongodump)
+        let output = Command::new("mongodump")
             .arg(format!("--uri={}", uri))
             .arg(format!("--archive={}", file_path.display()))
             .arg("--gzip")
