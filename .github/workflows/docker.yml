@@ -55,7 +55,8 @@ jobs:
           file: ${{ env.DOCKERFILE }}
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          # Use github.ref_name or fallback to short commit SHA
+          tags: ${{ env.IMAGE_NAME }}:${{ github.ref_name || github.sha }}
           target: ${{ env.TARGET }}
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
@@ -89,7 +90,7 @@ jobs:
           file: ${{ env.DOCKERFILE }}
           platforms: linux/arm64
           push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          tags: ${{ env.IMAGE_NAME }}:${{ github.ref_name || github.sha }}
           target: ${{ env.TARGET }}
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
@@ -106,17 +107,16 @@ jobs:
 
       - name: Create and push multi-arch manifest
         run: |
-          TAG=${{ github.ref_name }}
           IMAGE=${{ env.IMAGE_NAME }}
+          TAG=${{ github.ref_name || github.sha }}
 
-          # Create manifest for the tag
+          # Create manifest for the release tag
           docker manifest create $IMAGE:$TAG \
             $IMAGE:$TAG
 
-          # Push the manifest
           docker manifest push $IMAGE:$TAG
 
-          # Create and push latest if requested
+          # Also create latest manifest if requested
           if [ "${ADD_LATEST}" = "true" ]; then
             docker manifest create $IMAGE:latest \
               $IMAGE:latest
