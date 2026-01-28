@@ -114,7 +114,11 @@
 # =========================
 # Base image (shared)
 # =========================
-FROM rust:1.92.0 AS base
+#FROM rust:1.92.0 AS base
+ARG BUILDPLATFORM
+ARG TARGETARCH
+
+FROM --platform=$BUILDPLATFORM rust:1.92.0 AS base
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     pkg-config \
