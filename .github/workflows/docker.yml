@@ -296,17 +296,32 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Create and push manifest
+#      - name: Create and push manifest
+#        run: |
+#          AMD64_IMAGE=$(cat /tmp/digests/amd64/image.txt)
+#          ARM64_IMAGE=$(cat /tmp/digests/arm64/image.txt)
+#          REF_NAME=${GITHUB_REF#refs/tags/}
+#          MANIFEST_IMAGE="${{ inputs.image_name }}:$REF_NAME"
+#
+#          docker manifest create $MANIFEST_IMAGE $AMD64_IMAGE $ARM64_IMAGE
+#          docker manifest push $MANIFEST_IMAGE
+#
+#          if [ "${{ inputs.add_latest }}" = "true" ]; then
+#            docker manifest create ${{ inputs.image_name }}:latest $AMD64_IMAGE $ARM64_IMAGE
+#            docker manifest push ${{ inputs.image_name }}:latest
+#          fi
+
+      - name: Create and push manifest list
+        working-directory: /tmp/digests
         run: |
-          AMD64_IMAGE=$(cat /tmp/digests/amd64/image.txt)
-          ARM64_IMAGE=$(cat /tmp/digests/arm64/image.txt)
+          DOCKER_IMAGES="$(cat amd64/image.txt) $(cat arm64/image.txt)"
           REF_NAME=${GITHUB_REF#refs/tags/}
           MANIFEST_IMAGE="${{ inputs.image_name }}:$REF_NAME"
 
-          docker manifest create $MANIFEST_IMAGE $AMD64_IMAGE $ARM64_IMAGE
-          docker manifest push $MANIFEST_IMAGE
+          docker buildx imagetools create $DOCKER_IMAGES -t $MANIFEST_IMAGE
+          docker buildx imagetools inspect $MANIFEST_IMAGE
 
           if [ "${{ inputs.add_latest }}" = "true" ]; then
-            docker manifest create ${{ inputs.image_name }}:latest $AMD64_IMAGE $ARM64_IMAGE
-            docker manifest push ${{ inputs.image_name }}:latest
+            docker buildx imagetools create $DOCKER_IMAGES -t ${{ inputs.image_name }}:latest
+            docker buildx imagetools inspect ${{ inputs.image_name }}:latest
           fi
