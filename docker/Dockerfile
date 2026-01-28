@@ -18,7 +18,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-
 ARG TARGETARCH
 
 # =========================
@@ -29,8 +28,8 @@ RUN for v in 12 13 14 15 16 17 18; do \
         mkdir -p /usr/lib/postgresql/$v/bin; \
     done
 
-COPY assets/tools/x64/postgresql/ /tmp/pg-x64/
-COPY assets/tools/arm/postgresql/ /tmp/pg-arm/
+COPY assets/tools/amd64/postgresql/ /tmp/pg-x64/
+COPY assets/tools/arm64/postgresql/ /tmp/pg-arm/
 
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
         for v in 12 13 14 15 16 17 18; do \
@@ -44,17 +43,11 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     rm -rf /tmp/pg-x64 /tmp/pg-arm && \
     chmod +x /usr/lib/postgresql/*/bin/*
 
-
 # =========================
-# MongoDB Database Tools
+# MongoDB client binaries
 # =========================
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-arm64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
-    fi && \
-    apt-get update && apt-get install -y /tmp/mongodb-tools.deb && \
-    rm -f /tmp/mongodb-tools.deb && rm -rf /var/lib/apt/lists/*
+COPY assets/tools/${TARGETARCH}/mongodb/ /usr/local/mongodb/
+RUN chmod +x /usr/local/mongodb/bin/*
 
 WORKDIR /app
 
@@ -100,18 +93,8 @@ RUN apt-get update && apt-get install -y \
     libncurses6 \
     zlib1g \
     mariadb-client \
-    wget \
-    gnupg \
-    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-arm64-100.10.0.deb -O /tmp/mongodb-tools.deb; \
-    fi && \
-    dpkg -i /tmp/mongodb-tools.deb || apt-get install -y -f && \
-    rm -f /tmp/mongodb-tools.deb && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -121,6 +104,8 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 COPY --from=base /usr/lib/postgresql/ /usr/lib/postgresql/
+COPY --from=base /usr/local/mongodb/bin/ /usr/local/mongodb/bin/
+
 
 ENV APP_ENV=production
 
