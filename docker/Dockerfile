@@ -191,19 +191,18 @@ ARG TARGETARCH
 
 RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 
-COPY . .
-
-
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        apt-get update && apt-get install -y \
+        apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             gcc-aarch64-linux-gnu \
             libc6-dev-arm64-cross \
-            libssl-dev:arm64 \
         && rm -rf /var/lib/apt/lists/*; \
     fi
 
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+COPY . .
+
 
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
         cargo build --release --target x86_64-unknown-linux-gnu && \
