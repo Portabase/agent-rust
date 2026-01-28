@@ -101,7 +101,7 @@ jobs:
     name: Build AMD64 Image
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ steps.set-tags.outputs.amd64_image }}
+      image: ${{ steps.set-job-output.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -112,7 +112,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Set image tag
+      - name: Set AMD64 image tag
         id: set-tags
         run: |
           REF_NAME=${GITHUB_REF#refs/tags/}
@@ -129,15 +129,16 @@ jobs:
           tags: ${{ steps.set-tags.outputs.amd64_image }}
           target: ${{ inputs.target }}
 
-      - name: Set job output
+      - name: Set job output for manifest
+        id: set-job-output
         run: |
           echo "image=${{ steps.set-tags.outputs.amd64_image }}" >> $GITHUB_OUTPUT
 
   build-arm64:
     name: Build ARM64 Image
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04-arm   # native ARM64 runner
     outputs:
-      image: ${{ steps.set-tags.outputs.arm64_image }}
+      image: ${{ steps.set-job-output.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -148,7 +149,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Set image tag
+      - name: Set ARM64 image tag
         id: set-tags
         run: |
           REF_NAME=${GITHUB_REF#refs/tags/}
@@ -165,10 +166,10 @@ jobs:
           tags: ${{ steps.set-tags.outputs.arm64_image }}
           target: ${{ inputs.target }}
 
-      - name: Set job output
+      - name: Set job output for manifest
+        id: set-job-output
         run: |
           echo "image=${{ steps.set-tags.outputs.arm64_image }}" >> $GITHUB_OUTPUT
-
 
   create-manifest:
     name: Create Multi-Arch Manifest
@@ -188,10 +189,13 @@ jobs:
           IMAGE="${{ inputs.image_name }}:$REF_NAME"
           AMD64_IMAGE="${{ needs.build-amd64.outputs.image }}"
           ARM64_IMAGE="${{ needs.build-arm64.outputs.image }}"
-          
+
+          echo "AMD64_IMAGE=$AMD64_IMAGE"
+          echo "ARM64_IMAGE=$ARM64_IMAGE"
+
           docker manifest create $IMAGE $AMD64_IMAGE $ARM64_IMAGE
           docker manifest push $IMAGE
-          
+
           if [ "${{ inputs.add_latest }}" = "true" ]; then
             docker manifest create ${{ inputs.image_name }}:latest $AMD64_IMAGE $ARM64_IMAGE
             docker manifest push ${{ inputs.image_name }}:latest
