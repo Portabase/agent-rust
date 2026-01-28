@@ -129,6 +129,10 @@ jobs:
           tags: ${{ steps.set-tags.outputs.amd64_image }}
           target: ${{ inputs.target }}
 
+      - name: Set job output
+        run: |
+          echo "image=${{ steps.set-tags.outputs.amd64_image }}" >> $GITHUB_OUTPUT
+
   build-arm64:
     name: Build ARM64 Image
     runs-on: ubuntu-24.04-arm
@@ -160,6 +164,11 @@ jobs:
           push: true
           tags: ${{ steps.set-tags.outputs.arm64_image }}
           target: ${{ inputs.target }}
+
+      - name: Set job output
+        run: |
+          echo "image=${{ steps.set-tags.outputs.arm64_image }}" >> $GITHUB_OUTPUT
+
 
   create-manifest:
     name: Create Multi-Arch Manifest
