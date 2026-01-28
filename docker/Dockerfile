@@ -1,124 +1,120 @@
-## =========================
-## Base image (shared)
-## =========================
-#FROM rust:1.92.0 AS base
-#
-#RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-#    pkg-config \
-#    libssl-dev \
-#    tzdata \
-#    redis-server \
-#    ca-certificates \
-#    libpq5 \
-#    libreadline8 \
-#    libncurses6 \
-#    zlib1g \
-#    curl \
-#    mariadb-client \
-#    && apt-get clean \
-#    && rm -rf /var/lib/apt/lists/*
-#
-#ARG TARGETARCH
-#
-## =========================
-## PostgreSQL client binaries (versions 12-18)
-## =========================
-#
-#RUN for v in 12 13 14 15 16 17 18; do \
-#        mkdir -p /usr/lib/postgresql/$v/bin; \
-#    done
-#
-#COPY assets/tools/amd64/postgresql/ /tmp/pg-x64/
-#COPY assets/tools/arm64/postgresql/ /tmp/pg-arm/
-#
-#RUN if [ "$TARGETARCH" = "amd64" ]; then \
-#        for v in 12 13 14 15 16 17 18; do \
-#            cp -r /tmp/pg-x64/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
-#        done; \
-#    elif [ "$TARGETARCH" = "arm64" ]; then \
-#        for v in 12 13 14 15 16 17 18; do \
-#            cp -r /tmp/pg-arm/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
-#        done; \
-#    fi && \
-#    rm -rf /tmp/pg-x64 /tmp/pg-arm && \
-#    chmod +x /usr/lib/postgresql/*/bin/*
-#
-## =========================
-## MongoDB client binaries
-## =========================
-#COPY assets/tools/${TARGETARCH}/mongodb/ /usr/local/mongodb/
-#RUN chmod +x /usr/local/mongodb/bin/*
-#
-#WORKDIR /app
-#
-## =========================
-## Development image
-## =========================
-#FROM base AS dev
-#
-#RUN cargo install cargo-watch
-#
-## Pre-cache dependencies
-#COPY Cargo.toml Cargo.lock ./
-#RUN mkdir src && echo "fn main() {}" > src/main.rs
-#RUN cargo build
-#RUN rm -rf src
-#
-#COPY entrypoint.sh /entrypoint.sh
-#RUN chmod +x /entrypoint.sh
-#
-#CMD ["/entrypoint.sh"]
-#
-## =========================
-## Builder (production)
-## =========================
-#FROM base AS builder
-#
-#COPY . .
-#RUN cargo build --release
-#
-#RUN echo "APP_VERSION=$(cargo pkgid | awk -F# '{print $2}')" > /app/version.env
-#
-## =========================
-## Runtime (production)
-## =========================
-#FROM ubuntu:24.04 AS prod
-#
-#RUN apt-get update && apt-get install -y \
-#    redis-server \
-#    ca-certificates \
-#    tzdata \
-#    libpq5 \
-#    libreadline8 \
-#    libncurses6 \
-#    zlib1g \
-#    mariadb-client \
-#    && rm -rf /var/lib/apt/lists/*
-#
-#
-#WORKDIR /app
-#
-#COPY --from=builder /app/target/release/app /usr/local/bin/app
-#COPY --from=builder /app/version.env /app/version.env
-#COPY entrypoint.sh /entrypoint.sh
-#RUN chmod +x /entrypoint.sh
-#
-#COPY --from=base /usr/lib/postgresql/ /usr/lib/postgresql/
-#COPY --from=base /usr/local/mongodb/bin/ /usr/local/mongodb/bin/
-#
-#
-#ENV APP_ENV=production
-#
-#CMD ["/entrypoint.sh"]
+# =========================
+# Base image (shared)
+# =========================
+FROM rust:1.92.0 AS base
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    tzdata \
+    redis-server \
+    ca-certificates \
+    libpq5 \
+    libreadline8 \
+    libncurses6 \
+    zlib1g \
+    curl \
+    mariadb-client \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG TARGETARCH
+
+# =========================
+# PostgreSQL client binaries (versions 12-18)
+# =========================
+
+RUN for v in 12 13 14 15 16 17 18; do \
+        mkdir -p /usr/lib/postgresql/$v/bin; \
+    done
+
+COPY assets/tools/amd64/postgresql/ /tmp/pg-x64/
+COPY assets/tools/arm64/postgresql/ /tmp/pg-arm/
+
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        for v in 12 13 14 15 16 17 18; do \
+            cp -r /tmp/pg-x64/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
+        done; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        for v in 12 13 14 15 16 17 18; do \
+            cp -r /tmp/pg-arm/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
+        done; \
+    fi && \
+    rm -rf /tmp/pg-x64 /tmp/pg-arm && \
+    chmod +x /usr/lib/postgresql/*/bin/*
+
+# =========================
+# MongoDB client binaries
+# =========================
+COPY assets/tools/${TARGETARCH}/mongodb/ /usr/local/mongodb/
+RUN chmod +x /usr/local/mongodb/bin/*
+
+WORKDIR /app
+
+# =========================
+# Development image
+# =========================
+FROM base AS dev
+
+RUN cargo install cargo-watch
+
+# Pre-cache dependencies
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build
+RUN rm -rf src
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]
+
+# =========================
+# Builder (production)
+# =========================
+FROM base AS builder
+
+COPY . .
+RUN cargo build --release
+
+RUN echo "APP_VERSION=$(cargo pkgid | awk -F# '{print $2}')" > /app/version.env
+
+# =========================
+# Runtime (production)
+# =========================
+FROM ubuntu:24.04 AS prod
+
+RUN apt-get update && apt-get install -y \
+    redis-server \
+    ca-certificates \
+    tzdata \
+    libpq5 \
+    libreadline8 \
+    libncurses6 \
+    zlib1g \
+    mariadb-client \
+    && rm -rf /var/lib/apt/lists/*
+
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/app /usr/local/bin/app
+COPY --from=builder /app/version.env /app/version.env
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+COPY --from=base /usr/lib/postgresql/ /usr/lib/postgresql/
+COPY --from=base /usr/local/mongodb/bin/ /usr/local/mongodb/bin/
+
+
+ENV APP_ENV=production
+
+CMD ["/entrypoint.sh"]
 
 # =========================
 # Base image (shared)
 # =========================
 #FROM rust:1.92.0 AS base
-#ARG BUILDPLATFORM
-#ARG TARGETARCH
-#
-#FROM --platform=$BUILDPLATFORM rust:1.92.0 AS base
 #
 #RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 #    pkg-config \
@@ -191,18 +187,7 @@
 #
 #RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 #
-#RUN if [ "$TARGETARCH" = "arm64" ]; then \
-#        apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-#            gcc-aarch64-linux-gnu \
-#            libc6-dev-arm64-cross \
-#        && rm -rf /var/lib/apt/lists/*; \
-#    fi
-#
-#ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-#ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-#
 #COPY . .
-#
 #
 #RUN if [ "$TARGETARCH" = "amd64" ]; then \
 #        cargo build --release --target x86_64-unknown-linux-gnu && \
@@ -247,128 +232,4 @@
 #ENV APP_ENV=production
 #
 #CMD ["/entrypoint.sh"]
-# =========================
-# Base Rust image
-# =========================
-FROM rust:1.92.0 AS base
-
-ARG TARGETARCH
-ARG BUILDPLATFORM
-
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    tzdata \
-    redis-server \
-    ca-certificates \
-    libpq5 \
-    libreadline8 \
-    libncurses6 \
-    zlib1g \
-    curl \
-    mariadb-client \
-    qemu-user-static \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-
-# =========================
-# PostgreSQL client binaries (versions 12-18)
-# =========================
-RUN for v in 12 13 14 15 16 17 18; do mkdir -p /usr/lib/postgresql/$v/bin; done
-
-COPY assets/tools/amd64/postgresql/ /tmp/pg-x64/
-COPY assets/tools/arm64/postgresql/ /tmp/pg-arm/
-
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        for v in 12 13 14 15 16 17 18; do \
-            cp -r /tmp/pg-x64/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
-        done; \
-    else \
-        for v in 12 13 14 15 16 17 18; do \
-            cp -r /tmp/pg-arm/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
-        done; \
-    fi && \
-    rm -rf /tmp/pg-x64 /tmp/pg-arm && \
-    chmod +x /usr/lib/postgresql/*/bin/*
-
-# =========================
-# MongoDB client binaries
-# =========================
-COPY assets/tools/${TARGETARCH}/mongodb/ /usr/local/mongodb/
-RUN chmod +x /usr/local/mongodb/bin/*
-
-
-
-
-WORKDIR /app
-
-# =========================
-# Builder pour cross-compilation
-# =========================
-FROM base AS builder
-
-ARG TARGETARCH
-
-RUN rustup target add aarch64-unknown-linux-gnu
-
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        dpkg --add-architecture arm64 && \
-        apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            libc6-dev-arm64-cross \
-            libssl-dev:arm64 \
-        && rm -rf /var/lib/apt/lists/*; \
-    fi
-
-ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-ENV OPENSSL_DIR=/usr
-ENV OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
-ENV OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
-
-COPY . .
-
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        cargo build --release --target x86_64-unknown-linux-gnu && \
-        mv /app/target/x86_64-unknown-linux-gnu/release /app/target/release-app; \
-    else \
-        cargo build --release --target aarch64-unknown-linux-gnu && \
-        mv /app/target/aarch64-unknown-linux-gnu/release /app/target/release-app; \
-    fi
-
-# Enregistrer version
-RUN echo "APP_VERSION=$(cargo pkgid | awk -F# '{print $2}')" > /app/version.env
-
-# =========================
-# Runtime (production)
-# =========================
-FROM ubuntu:24.04 AS prod
-
-RUN apt-get update && apt-get install -y \
-    redis-server \
-    ca-certificates \
-    tzdata \
-    libpq5 \
-    libreadline8 \
-    libncurses6 \
-    zlib1g \
-    mariadb-client \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-ARG TARGETARCH
-
-COPY --from=builder /app/target/release-app/app /usr/local/bin/app
-COPY --from=builder /app/version.env /app/version.env
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-COPY --from=base /usr/lib/postgresql/ /usr/lib/postgresql/
-COPY --from=base /usr/local/mongodb/bin/ /usr/local/mongodb/bin/
-
-ENV APP_ENV=production
-CMD ["/entrypoint.sh"]
-
 

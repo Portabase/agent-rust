@@ -1,3 +1,74 @@
+#name: Docker Publish
+#
+#on:
+#  workflow_call:
+#    inputs:
+#      image_name:
+#        required: false
+#        type: string
+#        default: 'portabase/agent'
+#      add_latest:
+#        required: false
+#        type: boolean
+#        default: false
+#      target:
+#        required: false
+#        type: string
+#        default: 'prod'
+#      dockerfile:
+#        required: false
+#        type: string
+#        default: './docker/Dockerfile'
+#    secrets:
+#      DOCKER_USERNAME:
+#        required: true
+#      DOCKER_PASSWORD:
+#        required: true
+#
+#jobs:
+#  build-and-push:
+#    runs-on: ubuntu-latest
+#    permissions:
+#      packages: write
+#      contents: read
+#    steps:
+#      - name: Check out the repo
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Set up QEMU (enables multi-arch emulation)
+#        uses: docker/setup-qemu-action@v3
+#
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v3
+#
+#      - name: Log in to Docker Hub
+#        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
+#        with:
+#          username: ${{ secrets.DOCKER_USERNAME }}
+#          password: ${{ secrets.DOCKER_PASSWORD }}
+#
+#      - name: Set tags
+#        id: set-tags
+#        run: |
+#          REF_NAME=${GITHUB_REF#refs/tags/}
+#          TAGS="${{ inputs.image_name }}:$REF_NAME"
+#          if [[ "${{ inputs.add_latest }}" == "true" ]]; then
+#            TAGS="$TAGS,${{ inputs.image_name }}:latest"
+#          fi
+#          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+#
+#      - name: Build and push Docker image
+#        uses: docker/build-push-action@v6
+#        with:
+#          context: .
+#          file: ${{ inputs.dockerfile }}
+#          platforms: linux/amd64,linux/arm64
+#          push: true
+#          tags: ${{ steps.set-tags.outputs.tags }}
+#          target: ${{ inputs.target }}
+
 name: Docker Publish
 
 on:
@@ -26,25 +97,20 @@ on:
         required: true
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  build-and-push-amd64:
+    name: Build and Push AMD64
+    runs-on: ubuntu-latest   # x86_64 runner
     permissions:
       packages: write
       contents: read
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU (enables multi-arch emulation)
-        uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
+      - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
@@ -59,12 +125,50 @@ jobs:
           fi
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
-      - name: Build and push Docker image
+      - name: Build and push AMD64 image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ inputs.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.set-tags.outputs.tags }}
+          target: ${{ inputs.target }}
+
+  build-and-push-arm64:
+    name: Build and Push ARM64
+    runs-on: ubuntu-22.04-arm64   # ARM64 runner (self-hosted or cloud)
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set tags
+        id: set-tags
+        run: |
+          REF_NAME=${GITHUB_REF#refs/tags/}
+          TAGS="${{ inputs.image_name }}:$REF_NAME"
+          if [[ "${{ inputs.add_latest }}" == "true" ]]; then
+            TAGS="$TAGS,${{ inputs.image_name }}:latest"
+          fi
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and push ARM64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          platforms: linux/arm64
           push: true
           tags: ${{ steps.set-tags.outputs.tags }}
           target: ${{ inputs.target }}
