@@ -255,7 +255,6 @@ FROM rust:1.92.0 AS base
 ARG TARGETARCH
 ARG BUILDPLATFORM
 
-# Paquets communs
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -268,45 +267,21 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     zlib1g \
     curl \
     mariadb-client \
+    qemu-user-static \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-# =========================
-# PostgreSQL client binaries
-# =========================
-RUN for v in 12 13 14 15 16 17 18; do mkdir -p /usr/lib/postgresql/$v/bin; done
-COPY assets/tools/amd64/postgresql/ /tmp/pg-x64/
-COPY assets/tools/arm64/postgresql/ /tmp/pg-arm/
-
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        for v in 12 13 14 15 16 17 18; do \
-            cp -r /tmp/pg-x64/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
-        done; \
-    else \
-        for v in 12 13 14 15 16 17 18; do \
-            cp -r /tmp/pg-arm/postgresql-$v/bin/* /usr/lib/postgresql/$v/bin/; \
-        done; \
-    fi && rm -rf /tmp/pg-x64 /tmp/pg-arm && chmod +x /usr/lib/postgresql/*/bin/*
-
-# =========================
-# MongoDB client binaries
-# =========================
-COPY assets/tools/${TARGETARCH}/mongodb/ /usr/local/mongodb/
-RUN chmod +x /usr/local/mongodb/bin/*
 
 WORKDIR /app
 
 # =========================
-# Builder (production)
+# Builder pour cross-compilation
 # =========================
 FROM base AS builder
 
 ARG TARGETARCH
 
-# Ajouter cibles Rust
-RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+RUN rustup target add aarch64-unknown-linux-gnu
 
-# Installer toolchain cross-compilation ARM si nécessaire
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         dpkg --add-architecture arm64 && \
         apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -316,7 +291,6 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
         && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Config OpenSSL pour cross compilation
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV OPENSSL_DIR=/usr
@@ -325,7 +299,6 @@ ENV OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
 
 COPY . .
 
-# Build selon l'architecture
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
         cargo build --release --target x86_64-unknown-linux-gnu && \
         mv /app/target/x86_64-unknown-linux-gnu/release /app/target/release-app; \
@@ -334,6 +307,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
         mv /app/target/aarch64-unknown-linux-gnu/release /app/target/release-app; \
     fi
 
+# Enregistrer version
 RUN echo "APP_VERSION=$(cargo pkgid | awk -F# '{print $2}')" > /app/version.env
 
 # =========================
