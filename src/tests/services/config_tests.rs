@@ -7,10 +7,6 @@ use std::io::Write;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 
-// `ConfigService::load` never touches `self.ctx` on the `Some(file_path)` path,
-// so the values here don't matter — but `Context::new()` panics without an
-// `EDGE_KEY` env var, so build the struct directly (mirrors
-// backup_uploader_tests.rs's `ctx_pointing_at`).
 fn test_context() -> Arc<Context> {
     Arc::new(Context {
         edge_key: EdgeKey {

@@ -238,19 +238,13 @@ impl ConfigService {
         info!("Databases: {} instances loaded", databases.len());
         Ok(DatabasesConfig { databases })
     }
-
-    /// Like `load`, but a missing or unreadable local file is not fatal: it logs a
-    /// warning and returns an empty set so the agent can still operate on
-    /// dashboard-defined databases.
+    
     pub fn load_optional(&self, file_path: Option<&str>) -> DatabasesConfig {
-        match self.load(file_path) {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                tracing::warn!(
+        self.load(file_path).unwrap_or_else(|e| {
+            tracing::warn!(
                     "Local databases config unavailable ({e}); continuing with dashboard-defined databases only"
                 );
-                DatabasesConfig { databases: Vec::new() }
-            }
-        }
+            DatabasesConfig { databases: Vec::new() }
+        })
     }
 }

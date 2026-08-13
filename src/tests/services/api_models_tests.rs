@@ -228,8 +228,6 @@ fn resolve_dashboard_config_noop_when_not_encrypted() {
     assert!(status.resolved_config.is_none());
 }
 
-// Test helper: mirrors the dashboard's encryptJsonGcm envelope
-// base64(nonce(12) ‖ ciphertext ‖ tag(16)).
 fn encrypt_json_gcm(plaintext: &[u8], master_key_b64: &str) -> String {
     use aes_gcm::aead::{Aead, KeyInit};
     use aes_gcm::{Aes256Gcm, Key, Nonce};

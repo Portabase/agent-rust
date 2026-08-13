@@ -51,20 +51,14 @@ impl Agent {
     pub async fn run(&mut self, method: BackupMethod) -> Result<(), Box<dyn std::error::Error>> {
         let local = self.config_service.load_optional(None);
 
-        // Ping the merged set (local ∪ dashboard cache from the previous cycle)
-        // so the payload — and thus Ping Status — covers dashboard databases too.
         let merged_in = merge(&local.databases, &self.dashboard_cache);
         let ping_result = self.status_service.ping(&merged_in.databases).await?;
 
-        // Reconcile the authoritative dashboard set from this response
-        // (full-state: additions, edits and deletions all self-apply) and persist it.
         self.dashboard_cache = collect_configs(&ping_result);
         if let Err(e) = persist_cache(&self.cache_path, &self.dashboard_cache) {
             error!("Failed to persist dashboard cache: {e}");
         }
 
-        // Rebuild the merged set including databases new in THIS response, so their
-        // backup/restore actions can run in the same cycle.
         let merged = merge(&local.databases, &self.dashboard_cache);
 
         for db in ping_result.databases.iter() {

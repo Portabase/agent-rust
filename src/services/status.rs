@@ -15,9 +15,6 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing::info;
 
-/// Decrypt a database's dashboard `config_ciphertext` (if present) into
-/// `resolved_config`. AES-256-GCM envelope, same as `storages`. Errors are
-/// returned so the caller can log-and-skip a single database.
 pub fn resolve_dashboard_config(
     status: &mut DatabaseStatus,
     master_key_b64: &str,
