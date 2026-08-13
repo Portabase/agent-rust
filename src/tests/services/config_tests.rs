@@ -1,6 +1,7 @@
 use crate::core::context::Context;
 use crate::services::api::ApiClient;
 use crate::services::config::ConfigService;
+use crate::services::config::{build_config, DatabasesConfig, InputDatabaseConfig};
 use crate::utils::edge_key::EdgeKey;
 use std::io::Write;
 use std::sync::Arc;
@@ -263,4 +264,74 @@ fn docker_volume_requires_volume_name() {
     let service = ConfigService::new(test_context());
     let err = service.load(Some(file.path().to_str().unwrap())).unwrap_err();
     assert!(err.contains("volume_name"), "error was: {err}");
+}
+
+#[test]
+fn build_config_applies_type_defaults() {
+    let input: InputDatabaseConfig = serde_json::from_str(
+        r#"{
+            "name": "cluster1",
+            "type": "postgresql-cluster",
+            "username": "postgres",
+            "password": "p",
+            "port": 5432,
+            "host": "localhost",
+            "generated_id": "16678159-ff7e-4c97-8c83-0adeff214681"
+        }"#,
+    )
+    .unwrap();
+
+    let cfg = build_config(input).unwrap();
+    assert_eq!(cfg.db_type.as_str(), "postgresql-cluster");
+    assert_eq!(cfg.database, "postgres"); // cluster default
+}
+
+#[test]
+fn build_config_rejects_missing_required_field() {
+    let input: InputDatabaseConfig = serde_json::from_str(
+        r#"{
+            "name": "pg",
+            "type": "postgresql",
+            "username": "postgres",
+            "port": 5432,
+            "host": "localhost",
+            "generated_id": "16678159-ff7e-4c97-8c83-0adeff214681"
+        }"#,
+    )
+    .unwrap();
+
+    let err = build_config(input).unwrap_err();
+    assert!(err.contains("password"), "unexpected error: {err}");
+}
+
+#[test]
+fn load_optional_returns_empty_when_file_missing() {
+    let service = ConfigService::new(test_context());
+    let cfg = service.load_optional(Some("/nonexistent/path/does-not-exist.json"));
+    assert!(cfg.databases.is_empty());
+}
+
+#[test]
+fn databases_config_roundtrips_through_serde() {
+    let input: InputDatabaseConfig = serde_json::from_str(
+        r#"{
+            "name": "pg",
+            "type": "postgresql",
+            "database": "app",
+            "username": "postgres",
+            "password": "secret",
+            "port": 5432,
+            "host": "localhost",
+            "generated_id": "16678159-ff7e-4c97-8c83-0adeff214681"
+        }"#,
+    )
+    .unwrap();
+    let cfg = build_config(input).unwrap();
+    let wrapped = DatabasesConfig { databases: vec![cfg] };
+
+    let json = serde_json::to_string(&wrapped).unwrap();
+    let back: DatabasesConfig = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.databases[0].name, "pg");
+    assert_eq!(back.databases[0].db_type.as_str(), "postgresql");
+    assert_eq!(back.databases[0].password, "secret");
 }

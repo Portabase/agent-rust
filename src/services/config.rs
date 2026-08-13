@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::core::context::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 use std::fs::File;
@@ -12,7 +12,7 @@ use toml;
 use tracing::info;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum DbType {
     Mysql,
@@ -49,7 +49,7 @@ impl DbType {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DatabaseConfig {
     pub name: String,
     pub database: String,
@@ -68,7 +68,7 @@ pub struct DatabaseConfig {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DatabasesConfig {
     pub databases: Vec<DatabaseConfig>,
 }
@@ -96,6 +96,86 @@ pub struct InputDatabaseConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct InputDatabasesConfig {
     pub databases: Vec<InputDatabaseConfig>,
+}
+
+fn required<T: Clone>(opt: &Option<T>, db_name: &str, field_name: &str) -> Result<T, String> {
+    match opt {
+        Some(v) => Ok(v.clone()),
+        None => Err(format!(
+            "Missing required field '{}' for database '{}'",
+            field_name, db_name
+        )),
+    }
+}
+
+fn optional<T: Clone + Default>(opt: &Option<T>) -> T {
+    opt.clone().unwrap_or_default()
+}
+
+pub fn build_config(db: InputDatabaseConfig) -> Result<DatabaseConfig, String> {
+    if Uuid::parse_str(&db.generated_id).is_err() {
+        return Err(format!("Invalid UUID for database '{}'", db.name));
+    }
+
+    let username = match db.db_type {
+        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
+        | DbType::Mssql => required(&db.username, &db.name, "username")?,
+        _ => optional(&db.username),
+    };
+    let password = match db.db_type {
+        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
+        | DbType::Mssql => required(&db.password, &db.name, "password")?,
+        _ => optional(&db.password),
+    };
+    let host = match db.db_type {
+        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
+        | DbType::MongoDB | DbType::Redis | DbType::Firebird | DbType::Valkey | DbType::Mssql => {
+            required(&db.host, &db.name, "host")?
+        }
+        DbType::Sqlite | DbType::DockerVolume => optional(&db.host),
+    };
+    let port = match db.db_type {
+        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
+        | DbType::MongoDB | DbType::Redis | DbType::Firebird | DbType::Valkey | DbType::Mssql => {
+            required(&db.port, &db.name, "port")?
+        }
+        DbType::Sqlite | DbType::DockerVolume => db.port.unwrap_or(0),
+    };
+    let database_name = match db.db_type {
+        DbType::Sqlite | DbType::Redis | DbType::Valkey | DbType::DockerVolume => {
+            optional(&db.database)
+        }
+        DbType::PostgresqlCluster => db.database.clone().unwrap_or_else(|| "postgres".to_string()),
+        _ => required(&db.database, &db.name, "database")?,
+    };
+    let path_val = match db.db_type {
+        DbType::Sqlite => required(&db.path, &db.name, "path")?,
+        _ => optional(&db.path),
+    };
+    let max_packet_size = match db.db_type {
+        DbType::Mysql | DbType::Mariadb => db.max_packet_size.unwrap_or_else(|| "512M".to_string()),
+        _ => String::new(),
+    };
+    let volume_name = match db.db_type {
+        DbType::DockerVolume => required(&db.volume_name, &db.name, "volume_name")?,
+        _ => optional(&db.volume_name),
+    };
+
+    Ok(DatabaseConfig {
+        name: db.name,
+        database: database_name,
+        db_type: db.db_type,
+        username,
+        password,
+        host,
+        port,
+        generated_id: db.generated_id,
+        path: path_val,
+        max_packet_size,
+        volume_name,
+        container_name: db.container_name.clone(),
+        options: db.options.unwrap_or_default(),
+    })
 }
 
 pub struct ConfigService {
@@ -150,128 +230,27 @@ impl ConfigService {
             _ => return Err("Unsupported config file format. Use .json or .toml".to_string()),
         };
 
-        fn required<T: Clone>(
-            opt: &Option<T>,
-            db_name: &str,
-            field_name: &str,
-        ) -> Result<T, String> {
-            match opt {
-                Some(v) => Ok(v.clone()),
-                None => {
-                    let msg = format!(
-                        "Missing required field '{}' for database '{}'",
-                        field_name, db_name
-                    );
-                    Err(msg)
-                }
-            }
-        }
-
-        fn optional<T: Clone>(opt: &Option<T>) -> T
-        where
-            T: Default,
-        {
-            opt.clone().unwrap_or_default()
-        }
-
         let mut databases = Vec::with_capacity(input_config.databases.len());
-
         for db in input_config.databases {
-            if Uuid::parse_str(&db.generated_id).is_err() {
-                return Err(format!("Invalid UUID for database '{}'", db.name));
-            }
-
-            let username = match db.db_type {
-                DbType::Postgresql
-                | DbType::PostgresqlCluster
-                | DbType::Mysql
-                | DbType::Mariadb
-                | DbType::Mssql => required(&db.username, &db.name, "username")?,
-                _ => optional(&db.username),
-            };
-
-            let password = match db.db_type {
-                DbType::Postgresql
-                | DbType::PostgresqlCluster
-                | DbType::Mysql
-                | DbType::Mariadb
-                | DbType::Mssql => required(&db.password, &db.name, "password")?,
-                _ => optional(&db.password),
-            };
-
-            let host = match db.db_type {
-                DbType::Postgresql
-                | DbType::PostgresqlCluster
-                | DbType::Mysql
-                | DbType::Mariadb
-                | DbType::MongoDB
-                | DbType::Redis
-                | DbType::Firebird
-                | DbType::Valkey
-                | DbType::Mssql => required(&db.host, &db.name, "host")?,
-                DbType::Sqlite | DbType::DockerVolume => optional(&db.host),
-            };
-
-            let port = match db.db_type {
-                DbType::Postgresql
-                | DbType::PostgresqlCluster
-                | DbType::Mysql
-                | DbType::Mariadb
-                | DbType::MongoDB
-                | DbType::Redis
-                | DbType::Firebird
-                | DbType::Valkey
-                | DbType::Mssql => required(&db.port, &db.name, "port")?,
-                DbType::Sqlite | DbType::DockerVolume => db.port.unwrap_or(0),
-            };
-
-            let database_name = match db.db_type {
-                DbType::Sqlite | DbType::Redis | DbType::Valkey | DbType::DockerVolume => {
-                    optional(&db.database)
-                }
-                DbType::PostgresqlCluster => db
-                    .database
-                    .clone()
-                    .unwrap_or_else(|| "postgres".to_string()),
-                _ => required(&db.database, &db.name, "database")?,
-            };
-
-            let path_val = match db.db_type {
-                DbType::Sqlite => required(&db.path, &db.name, "path")?,
-                _ => optional(&db.path),
-            };
-
-            let max_packet_size = match db.db_type {
-                DbType::Mysql | DbType::Mariadb => {
-                    db.max_packet_size.unwrap_or_else(|| "512M".to_string())
-                }
-                _ => String::new(),
-            };
-
-            let volume_name = match db.db_type {
-                DbType::DockerVolume => required(&db.volume_name, &db.name, "volume_name")?,
-                _ => optional(&db.volume_name),
-            };
-            let container_name = db.container_name.clone();
-
-            databases.push(DatabaseConfig {
-                name: db.name,
-                database: database_name,
-                db_type: db.db_type,
-                username,
-                password,
-                host,
-                port,
-                generated_id: db.generated_id,
-                path: path_val,
-                max_packet_size,
-                volume_name,
-                container_name,
-                options: db.options.unwrap_or_default(),
-            });
+            databases.push(build_config(db)?);
         }
 
         info!("Databases: {} instances loaded", databases.len());
         Ok(DatabasesConfig { databases })
+    }
+
+    /// Like `load`, but a missing or unreadable local file is not fatal: it logs a
+    /// warning and returns an empty set so the agent can still operate on
+    /// dashboard-defined databases.
+    pub fn load_optional(&self, file_path: Option<&str>) -> DatabasesConfig {
+        match self.load(file_path) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                tracing::warn!(
+                    "Local databases config unavailable ({e}); continuing with dashboard-defined databases only"
+                );
+                DatabasesConfig { databases: Vec::new() }
+            }
+        }
     }
 }
