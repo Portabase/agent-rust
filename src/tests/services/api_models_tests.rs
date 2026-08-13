@@ -148,3 +148,100 @@ fn database_status_encrypted_envelope() {
     assert_eq!(status.storages_encrypted, Some(true));
     assert_eq!(status.storages_ciphertext.as_deref(), Some("AQIDBA=="));
 }
+
+#[test]
+fn database_status_defaults_config_fields_absent() {
+    let json = r#"{
+        "dbms": "postgresql",
+        "generatedId": "16678159-ff7e-4c97-8c83-0adeff214681",
+        "encrypt": false,
+        "data": { "backup": { "action": false, "cron": null },
+                  "restore": { "action": false, "file": null, "metaFile": null, "size": null } }
+    }"#;
+    let status: crate::services::api::models::agent::status::DatabaseStatus =
+        serde_json::from_str(json).unwrap();
+    assert_eq!(status.config_encrypted, None);
+    assert!(status.config_ciphertext.is_none());
+    assert!(status.resolved_config.is_none());
+}
+
+#[test]
+fn resolve_dashboard_config_decrypts_full_entry() {
+    use crate::services::status::resolve_dashboard_config;
+    use base64::{engine::general_purpose, Engine};
+
+    // 32-byte master key, base64 STANDARD (matches decrypt_json_gcm).
+    let master_key_b64 = general_purpose::STANDARD.encode([7u8; 32]);
+
+    // Full agent-entry shape the dashboard encrypts.
+    let entry = r#"{
+        "name": "Dashboard PG",
+        "type": "postgresql",
+        "database": "app",
+        "username": "postgres",
+        "password": "s3cret",
+        "port": 5432,
+        "host": "10.0.0.10",
+        "generated_id": "16678159-ff7e-4c97-8c83-0adeff214681"
+    }"#;
+    let ciphertext = encrypt_json_gcm(entry.as_bytes(), &master_key_b64);
+
+    let mut status: crate::services::api::models::agent::status::DatabaseStatus =
+        serde_json::from_str(
+            r#"{
+                "dbms": "postgresql",
+                "generatedId": "16678159-ff7e-4c97-8c83-0adeff214681",
+                "encrypt": false,
+                "config_encrypted": true,
+                "config_ciphertext": "PLACEHOLDER",
+                "data": { "backup": { "action": false, "cron": null },
+                          "restore": { "action": false, "file": null, "metaFile": null, "size": null } }
+            }"#,
+        )
+        .unwrap();
+    status.config_ciphertext = Some(ciphertext);
+
+    resolve_dashboard_config(&mut status, &master_key_b64).unwrap();
+
+    let cfg = status.resolved_config.expect("resolved");
+    assert_eq!(cfg.name, "Dashboard PG");
+    assert_eq!(cfg.password, "s3cret");
+    assert_eq!(cfg.host, "10.0.0.10");
+    assert_eq!(cfg.db_type.as_str(), "postgresql");
+}
+
+#[test]
+fn resolve_dashboard_config_noop_when_not_encrypted() {
+    use crate::services::status::resolve_dashboard_config;
+    let mut status: crate::services::api::models::agent::status::DatabaseStatus =
+        serde_json::from_str(
+            r#"{
+                "dbms": "postgresql",
+                "generatedId": "16678159-ff7e-4c97-8c83-0adeff214681",
+                "encrypt": false,
+                "data": { "backup": { "action": false, "cron": null },
+                          "restore": { "action": false, "file": null, "metaFile": null, "size": null } }
+            }"#,
+        )
+        .unwrap();
+    resolve_dashboard_config(&mut status, "unused").unwrap();
+    assert!(status.resolved_config.is_none());
+}
+
+// Test helper: mirrors the dashboard's encryptJsonGcm envelope
+// base64(nonce(12) ‖ ciphertext ‖ tag(16)).
+fn encrypt_json_gcm(plaintext: &[u8], master_key_b64: &str) -> String {
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{Aes256Gcm, Key, Nonce};
+    use base64::{engine::general_purpose, Engine};
+
+    let key_bytes = general_purpose::STANDARD.decode(master_key_b64).unwrap();
+    let key = Key::<Aes256Gcm>::try_from(key_bytes.as_slice()).unwrap();
+    let cipher = Aes256Gcm::new(&key);
+    let nonce_bytes = [0u8; 12];
+    let nonce = Nonce::try_from(&nonce_bytes[..]).unwrap();
+    let ct = cipher.encrypt(&nonce, plaintext).unwrap();
+    let mut data = nonce_bytes.to_vec();
+    data.extend_from_slice(&ct);
+    general_purpose::STANDARD.encode(data)
+}
