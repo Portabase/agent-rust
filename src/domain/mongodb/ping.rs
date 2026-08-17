@@ -19,7 +19,11 @@ pub async fn run(cfg: DatabaseConfig) -> Result<bool> {
         Ok(_) => Ok(true),
         Err(e) => {
             error!("--- MongoDB Connection Error Details ---");
-            error!("Target Host: {}:{}", cfg.host, cfg.port);
+            if cfg.port == 0 {
+                error!("Target Host: {} (srv)", cfg.host);
+            } else {
+                error!("Target Host: {}:{}", cfg.host, cfg.port);
+            }
             error!("Error Kind: {:?}", e.kind);
             error!("Full Error: {}", e);
             error!("Check you database network connectivity");

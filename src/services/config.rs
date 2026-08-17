@@ -217,12 +217,11 @@ impl ConfigService {
                 | DbType::PostgresqlCluster
                 | DbType::Mysql
                 | DbType::Mariadb
-                | DbType::MongoDB
                 | DbType::Redis
                 | DbType::Firebird
                 | DbType::Valkey
                 | DbType::Mssql => required(&db.port, &db.name, "port")?,
-                DbType::Sqlite | DbType::DockerVolume => db.port.unwrap_or(0),
+                DbType::MongoDB | DbType::Sqlite | DbType::DockerVolume => db.port.unwrap_or(0),
             };
 
             let database_name = match db.db_type {

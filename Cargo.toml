@@ -57,6 +57,7 @@ testcontainers = "0.27.1"
 testcontainers-modules = { version = "0.15.0", features = ["postgres", "redis", "valkey", "mysql", "mariadb", "mongo"] }
 postgres = "0.19.12"
 url = "2.5.8"
+percent-encoding = "2.3.2"
 bollard = "0.20.0"
 
 [dev-dependencies]
