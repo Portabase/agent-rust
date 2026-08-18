@@ -21,7 +21,7 @@ services:
       LOG: debug
       TZ: "Europe/Paris"
 #      TMPDIR: /scratch
-      EDGE_KEY: "eyJzZXJ2ZXJVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODciLCJhZ2VudElkIjoiMGNjODEyYzktM2M4Ny00NmM3LWJlNjctOTI4MDljMmQ3N2NlIiwibWFzdGVyS2V5QjY0IjoiMUh0djdtWCtYVkJxL0IzUEV2WDlZZjlQeUdVZW5oRHlXemo5THRqNW90WT0ifQ=="
+      EDGE_KEY: "eyJzZXJ2ZXJVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODciLCJhZ2VudElkIjoiMGNlNjVjMDQtMDJiOS00YjMzLTk5MzYtMzIzYTFhOGU4MTk3IiwibWFzdGVyS2V5QjY0IjoiMUh0djdtWCtYVkJxL0IzUEV2WDlZZjlQeUdVZW5oRHlXemo5THRqNW90WT0ifQ=="
       #CHUNK_SIZE_MB: "1"
       #POOLING: 1
       #DATABASES_CONFIG_FILE: "config.toml"
