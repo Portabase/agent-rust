@@ -1,4 +1,6 @@
-use crate::domain::mongodb::connection::{extract_db_name, get_mongo_uri, select_mongo_path};
+use crate::domain::mongodb::connection::{
+    build_mongo_uri, extract_db_name, get_mongo_uri, select_mongo_path,
+};
 use crate::services::backup::logger::JobLogger;
 use crate::services::config::DatabaseConfig;
 use anyhow::{Context, Result};
@@ -16,13 +18,7 @@ pub async fn run(cfg: DatabaseConfig, restore_file: PathBuf, logger: Arc<JobLogg
 
         let dry_start = Instant::now();
         let dry_run = Command::new(&mongorestore)
-            .arg(format!(
-                "--uri={}",
-                format!(
-                    "mongodb://{}:{}@{}:{}/?authSource=admin",
-                    cfg.username, cfg.password, cfg.host, cfg.port
-                )
-            ))
+            .arg(format!("--uri={}", build_mongo_uri(&cfg, false)))
             .arg(format!("--archive={}", restore_file.display()))
             .arg("--gzip")
             .arg("--dryRun")
