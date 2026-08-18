@@ -118,34 +118,54 @@ pub fn build_config(db: InputDatabaseConfig) -> Result<DatabaseConfig, String> {
     }
 
     let username = match db.db_type {
-        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
+        DbType::Postgresql
+        | DbType::PostgresqlCluster
+        | DbType::Mysql
+        | DbType::Mariadb
         | DbType::Mssql => required(&db.username, &db.name, "username")?,
         _ => optional(&db.username),
     };
     let password = match db.db_type {
-        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
+        DbType::Postgresql
+        | DbType::PostgresqlCluster
+        | DbType::Mysql
+        | DbType::Mariadb
         | DbType::Mssql => required(&db.password, &db.name, "password")?,
         _ => optional(&db.password),
     };
     let host = match db.db_type {
-        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
-        | DbType::MongoDB | DbType::Redis | DbType::Firebird | DbType::Valkey | DbType::Mssql => {
-            required(&db.host, &db.name, "host")?
-        }
+        DbType::Postgresql
+        | DbType::PostgresqlCluster
+        | DbType::Mysql
+        | DbType::Mariadb
+        | DbType::MongoDB
+        | DbType::Redis
+        | DbType::Firebird
+        | DbType::Valkey
+        | DbType::Mssql => required(&db.host, &db.name, "host")?,
         DbType::Sqlite | DbType::DockerVolume => optional(&db.host),
     };
+
     let port = match db.db_type {
-        DbType::Postgresql | DbType::PostgresqlCluster | DbType::Mysql | DbType::Mariadb
-        | DbType::MongoDB | DbType::Redis | DbType::Firebird | DbType::Valkey | DbType::Mssql => {
-            required(&db.port, &db.name, "port")?
-        }
-        DbType::Sqlite | DbType::DockerVolume => db.port.unwrap_or(0),
+        DbType::Postgresql
+        | DbType::PostgresqlCluster
+        | DbType::Mysql
+        | DbType::Mariadb
+        | DbType::Redis
+        | DbType::Firebird
+        | DbType::Valkey
+        | DbType::Mssql => required(&db.port, &db.name, "port")?,
+        DbType::MongoDB | DbType::Sqlite | DbType::DockerVolume => db.port.unwrap_or(0),
     };
+
     let database_name = match db.db_type {
         DbType::Sqlite | DbType::Redis | DbType::Valkey | DbType::DockerVolume => {
             optional(&db.database)
         }
-        DbType::PostgresqlCluster => db.database.clone().unwrap_or_else(|| "postgres".to_string()),
+        DbType::PostgresqlCluster => db
+            .database
+            .clone()
+            .unwrap_or_else(|| "postgres".to_string()),
         _ => required(&db.database, &db.name, "database")?,
     };
     let path_val = match db.db_type {
@@ -238,7 +258,7 @@ impl ConfigService {
         info!("Databases: {} instances loaded", databases.len());
         Ok(DatabasesConfig { databases })
     }
-    
+
     pub fn load_optional(&self, file_path: Option<&str>) -> DatabasesConfig {
         self.load(file_path).unwrap_or_else(|e| {
             tracing::warn!(
