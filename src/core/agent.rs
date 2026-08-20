@@ -2,13 +2,16 @@
 
 use crate::core::context::Context;
 use crate::services::backup::BackupService;
-use crate::services::config::ConfigService;
+use crate::services::config::{ConfigService, DatabaseConfig};
 use crate::services::cron::CronService;
+use crate::services::dashboard_config::{collect_configs, load_cache, merge, persist_cache};
 use crate::services::restore::RestoreService;
 use crate::services::status::StatusService;
+use crate::settings::CONFIG;
 use crate::utils::common::BackupMethod;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info, warn};
 
 pub struct Agent {
     ctx: Arc<Context>,
@@ -17,6 +20,8 @@ pub struct Agent {
     cron_service: CronService,
     backup_service: BackupService,
     restore_service: RestoreService,
+    dashboard_cache: Vec<DatabaseConfig>,
+    cache_path: PathBuf,
 }
 
 impl Agent {
@@ -28,6 +33,9 @@ impl Agent {
         let backup_service = BackupService::new(ctx.clone());
         let restore_service = RestoreService::new(ctx.clone());
 
+        let cache_path = PathBuf::from(&CONFIG.data_path).join("dashboard_databases.json");
+        let dashboard_cache = load_cache(&cache_path);
+
         Agent {
             ctx,
             config_service,
@@ -35,19 +43,33 @@ impl Agent {
             cron_service,
             backup_service,
             restore_service,
+            dashboard_cache,
+            cache_path,
         }
     }
 
     pub async fn run(&mut self, method: BackupMethod) -> Result<(), Box<dyn std::error::Error>> {
-        let config = self.config_service.load(None)?;
-        let ping_result = self.status_service.ping(&config.databases).await?;
+        let local = self.config_service.load_optional(None);
+
+        let merged_in = merge(&local.databases, &self.dashboard_cache);
+        let ping_result = self.status_service.ping(&merged_in.databases).await?;
+
+        self.dashboard_cache = collect_configs(&ping_result);
+        if let Err(e) = persist_cache(&self.cache_path, &self.dashboard_cache) {
+            error!("Failed to persist dashboard cache: {e}");
+        }
+
+        let merged = merge(&local.databases, &self.dashboard_cache);
 
         for db in ping_result.databases.iter() {
-            let database = config
+            let Some(database) = merged
                 .databases
                 .iter()
                 .find(|cfg_db| cfg_db.generated_id == db.generated_id)
-                .unwrap();
+            else {
+                warn!("No config for returned database {}; skipping", db.generated_id);
+                continue;
+            };
             info!(
                 "Generated Id: {} | backup action: {} | restore action: {} | Database Name: {}",
                 db.generated_id, db.data.backup.action, db.data.restore.action, database.name,
@@ -59,14 +81,14 @@ impl Agent {
                     .backup_service
                     .dispatch(
                         &db.generated_id,
-                        &config,
+                        &merged,
                         method.clone(),
                         &db.storages,
                         db.encrypt,
                     )
                     .await;
             } else if db.data.restore.action {
-                let _ = self.restore_service.dispatch(db, &config).await;
+                let _ = self.restore_service.dispatch(db, &merged).await;
             }
         }
 

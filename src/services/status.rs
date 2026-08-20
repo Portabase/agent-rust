@@ -3,9 +3,10 @@
 use crate::core::context::Context;
 use crate::domain::factory::DatabaseFactory;
 use crate::services::api::endpoints::status::DatabasePayload;
+use crate::services::api::models::agent::status::DatabaseStatus;
 use crate::services::api::models::agent::status::DatabaseStorage;
 use crate::services::api::models::agent::status::PingResult;
-use crate::services::config::DatabaseConfig;
+use crate::services::config::{build_config, DatabaseConfig, InputDatabaseConfig};
 use crate::settings::CONFIG;
 use crate::utils::file::decrypt_json_gcm;
 use futures_util::future::try_join_all;
@@ -13,6 +14,26 @@ use reqwest::Client;
 use std::error::Error;
 use std::sync::Arc;
 use tracing::info;
+
+pub fn resolve_dashboard_config(
+    status: &mut DatabaseStatus,
+    master_key_b64: &str,
+) -> Result<(), String> {
+    if status.config_encrypted != Some(true) {
+        return Ok(());
+    }
+    let ciphertext = status
+        .config_ciphertext
+        .as_deref()
+        .ok_or("config_encrypted set but config_ciphertext missing")?;
+
+    let plaintext = decrypt_json_gcm(ciphertext, master_key_b64)
+        .map_err(|e| format!("Failed to decrypt config: {e}"))?;
+    let input: InputDatabaseConfig = serde_json::from_slice(&plaintext)
+        .map_err(|e| format!("Failed to parse decrypted config: {e}"))?;
+    status.resolved_config = Some(build_config(input)?);
+    Ok(())
+}
 
 pub struct StatusService {
     ctx: Arc<Context>,
@@ -66,6 +87,10 @@ impl StatusService {
 
                 db.storages = serde_json::from_slice::<Vec<DatabaseStorage>>(&plaintext)
                     .map_err(|e| format!("Failed to parse decrypted storages: {e}"))?;
+            }
+
+            if let Err(e) = resolve_dashboard_config(db, &edge_key.master_key_b64) {
+                tracing::warn!("Skipping dashboard config for {}: {e}", db.generated_id);
             }
         }
         Ok(result)

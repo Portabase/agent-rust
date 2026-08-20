@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::services::config::DatabaseConfig;
 use crate::utils::deserializer::{deserialize_snake_case, string_or_number_to_string};
 use serde::{Deserialize, Serialize};
 use toml::Value;
@@ -39,6 +40,13 @@ pub struct DatabaseStatus {
     pub storages_encrypted: Option<bool>,
     #[serde(default)]
     pub storages_ciphertext: Option<String>,
+    #[serde(default)]
+    pub config_encrypted: Option<bool>,
+    #[serde(default)]
+    pub config_ciphertext: Option<String>,
+    /// Filled in memory after decrypting `config_ciphertext`; never on the wire.
+    #[serde(skip)]
+    pub resolved_config: Option<DatabaseConfig>,
     pub encrypt: bool,
     pub data: DatabaseData,
 }
