@@ -137,9 +137,6 @@ impl StorageProvider for S3Provider {
             .credentials_provider(credentials)
             .region(region)
             .force_path_style(true)
-            // S3-compatible endpoints (MinIO, Garage, RustFS, Synology, ...) reject the
-            // default CRC32 integrity checksums the SDK attaches to multipart uploads.
-            // Only send checksums when the operation actually requires them.
             .request_checksum_calculation(RequestChecksumCalculation::WhenRequired)
             .endpoint_url(endpoint)
             .behavior_version(BehaviorVersion::latest())
