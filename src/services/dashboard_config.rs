@@ -46,6 +46,9 @@ pub fn persist_cache(path: &Path, databases: &[DatabaseConfig]) -> std::io::Resu
     };
     let json = serde_json::to_string_pretty(&wrapper)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, path)?;

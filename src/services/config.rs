@@ -207,16 +207,19 @@ impl ConfigService {
         ConfigService { ctx }
     }
 
-    pub fn load(&self, file_path: Option<&str>) -> Result<DatabasesConfig, String> {
-        let path: String = if let Some(fp) = file_path {
-            fp.to_string()
-        } else {
-            format!(
+    fn resolve_path(file_path: Option<&str>) -> String {
+        match file_path {
+            Some(fp) => fp.to_string(),
+            None => format!(
                 "{}/{}",
                 crate::settings::CONFIG.data_path,
                 crate::settings::CONFIG.databases_config_file
-            )
-        };
+            ),
+        }
+    }
+
+    pub fn load(&self, file_path: Option<&str>) -> Result<DatabasesConfig, String> {
+        let path = Self::resolve_path(file_path);
 
         info!("Loading databases config from: {}", path);
 
@@ -260,6 +263,18 @@ impl ConfigService {
     }
 
     pub fn load_optional(&self, file_path: Option<&str>) -> DatabasesConfig {
+        let path = Self::resolve_path(file_path);
+
+        if !Path::new(&path).exists() {
+            info!(
+                "No local databases config at {}; using dashboard-defined databases only",
+                path
+            );
+            return DatabasesConfig {
+                databases: Vec::new(),
+            };
+        }
+
         self.load(file_path).unwrap_or_else(|e| {
             tracing::warn!(
                     "Local databases config unavailable ({e}); continuing with dashboard-defined databases only"
