@@ -1,4 +1,5 @@
 use crate::services::backup::logger::JobLogger;
+use crate::domain::mysql::connection::connection_args;
 use crate::services::config::DatabaseConfig;
 use anyhow::{Context, Result};
 use std::fs::File;
@@ -21,12 +22,7 @@ pub async fn run(cfg: DatabaseConfig, restore_file: PathBuf, logger: Arc<JobLogg
 
         let drop_start = Instant::now();
         let drop_output = Command::new("mysql")
-            .arg("--host")
-            .arg(&cfg.host)
-            .arg("--port")
-            .arg(cfg.port.to_string())
-            .arg("--user")
-            .arg(&cfg.username)
+            .args(connection_args(&cfg))
             .arg("-e")
             .arg(&drop_create_cmd)
             .env("MYSQL_PWD", &cfg.password)
@@ -48,12 +44,7 @@ pub async fn run(cfg: DatabaseConfig, restore_file: PathBuf, logger: Arc<JobLogg
         let start = Instant::now();
 
         let mut child = Command::new("mysql")
-            .arg("--host")
-            .arg(&cfg.host)
-            .arg("--port")
-            .arg(cfg.port.to_string())
-            .arg("--user")
-            .arg(&cfg.username)
+            .args(connection_args(&cfg))
             .arg("--database")
             .arg(&cfg.database)
             .env("MYSQL_PWD", &cfg.password)

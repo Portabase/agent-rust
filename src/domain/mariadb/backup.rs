@@ -1,5 +1,6 @@
 use crate::domain::mariadb::connection::{select_mariadb_path, server_version};
 use crate::services::backup::logger::JobLogger;
+use crate::domain::mysql::connection::connection_args;
 use crate::services::config::DatabaseConfig;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -42,9 +43,7 @@ pub async fn run(
 
         let start = Instant::now();
         let output = Command::new("mariadb-dump")
-            .arg("--host").arg(&cfg.host)
-            .arg("--port").arg(cfg.port.to_string())
-            .arg("--user").arg(&cfg.username)
+            .args(connection_args(&cfg))
             .arg("--routines")
             .arg("--events")
             .arg("--triggers")

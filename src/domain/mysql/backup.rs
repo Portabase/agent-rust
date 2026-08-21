@@ -1,4 +1,4 @@
-use crate::domain::mysql::connection::server_version;
+use crate::domain::mysql::connection::{connection_args, server_version};
 use crate::services::backup::logger::JobLogger;
 use crate::services::config::DatabaseConfig;
 use anyhow::{Context, Result};
@@ -39,9 +39,7 @@ pub async fn run(
 
         let start = Instant::now();
         let output = Command::new("mysqldump")
-            .arg("--host").arg(&cfg.host)
-            .arg("--port").arg(cfg.port.to_string())
-            .arg("--user").arg(&cfg.username)
+            .args(connection_args(&cfg))
             .arg("--routines")
             .arg("--events")
             .arg("--triggers")

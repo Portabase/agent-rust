@@ -1,4 +1,5 @@
 use crate::domain::factory::DatabaseFactory;
+use crate::domain::mysql::connection::connection_args;
 use crate::services::config::{DatabaseConfig, DbType};
 use crate::tests::init_tracing_for_test;
 use crate::utils::compress::{compress_to_tar_gz_large, decompress_large_tar_gz};
@@ -95,4 +96,55 @@ async fn mysql_backup_restore_test() {
             assert!(false)
         }
     }
+}
+
+fn tunnelled_config(options: serde_json::Value) -> DatabaseConfig {
+    DatabaseConfig {
+        name: "my-db".to_string(),
+        database: "my-db".to_string(),
+        db_type: DbType::Mysql,
+        username: "my-db-user".to_string(),
+        password: "my-db-password".to_string(),
+        port: 3306,
+        host: "localhost".to_string(),
+        generated_id: "16678159-ff7e-4c97-8c83-0adeff214681".to_string(),
+        path: "".to_string(),
+        max_packet_size: "512M".to_string(),
+        volume_name: "".to_string(),
+        container_name: None,
+        options: serde_json::from_value(options).unwrap(),
+    }
+}
+
+#[test]
+fn connection_args_force_tcp_for_localhost() {
+    // A `localhost` host makes the clients pick a Unix socket and ignore `--port`,
+    // which breaks databases reached through an SSH tunnel.
+    let cfg = tunnelled_config(serde_json::json!({}));
+
+    assert_eq!(
+        connection_args(&cfg),
+        vec![
+            "--protocol=tcp",
+            "--host",
+            "localhost",
+            "--port",
+            "3306",
+            "--user",
+            "my-db-user",
+        ]
+    );
+}
+
+#[test]
+fn connection_args_allow_socket_opt_in() {
+    let cfg = tunnelled_config(serde_json::json!({
+        "protocol": "socket",
+        "socket": "/var/run/mysqld/mysqld.sock",
+    }));
+
+    let args = connection_args(&cfg);
+
+    assert_eq!(args[0], "--protocol=socket");
+    assert_eq!(args.last().unwrap(), "--socket=/var/run/mysqld/mysqld.sock");
 }

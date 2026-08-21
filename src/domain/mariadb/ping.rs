@@ -1,3 +1,4 @@
+use crate::domain::mysql::connection::connection_args;
 use crate::services::config::DatabaseConfig;
 use std::collections::HashMap;
 use tokio::process::Command;
@@ -5,12 +6,7 @@ use tokio::time::{Duration, timeout};
 
 pub async fn run(cfg: DatabaseConfig, env: HashMap<String, String>) -> anyhow::Result<bool> {
     let mut cmd = Command::new("mysqladmin");
-    cmd.arg("--host")
-        .arg(cfg.host)
-        .arg("--port")
-        .arg(cfg.port.to_string())
-        .arg("--user")
-        .arg(cfg.username)
+    cmd.args(connection_args(&cfg))
         .arg("ping")
         .envs(env);
 

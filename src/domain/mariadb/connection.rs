@@ -1,16 +1,12 @@
 use std::path::PathBuf;
+use crate::domain::mysql::connection::connection_args;
 use crate::services::config::DatabaseConfig;
 use anyhow::Result;
 use std::process::Command;
 
 pub async fn server_version(cfg: &DatabaseConfig) -> Result<String> {
     let output = Command::new("mariadb")
-        .arg("--host")
-        .arg(&cfg.host)
-        .arg("--port")
-        .arg(cfg.port.to_string())
-        .arg("--user")
-        .arg(&cfg.username)
+        .args(connection_args(cfg))
         .arg("-e")
         .arg("SELECT VERSION();")
         .env("MYSQL_PWD", &cfg.password)
