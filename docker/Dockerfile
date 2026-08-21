@@ -142,6 +142,8 @@ RUN curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
 
 WORKDIR /app
 
+RUN mkdir -p /config
+
 COPY --from=builder /app/target/release/app /usr/local/bin/app
 COPY --from=builder /app/version.env /app/version.env
 COPY entrypoint.sh /entrypoint.sh
