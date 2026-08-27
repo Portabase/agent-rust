@@ -4,6 +4,7 @@ use super::service::BackupService;
 use crate::services::api::models::agent::status::DatabaseStorage;
 use crate::services::storage;
 use crate::utils::common::BackupMethod;
+use crate::utils::retry::{RetryPolicy, retry};
 use anyhow::{Result, bail};
 use futures::future::join_all;
 use std::sync::Arc;
@@ -97,16 +98,44 @@ impl BackupService {
                 /*
                  STORAGE UPLOAD
                 */
-                let upload_result = provider
-                    .upload(
-                        ctx_clone.clone(),
-                        result_clone,
-                        method,
-                        &storage,
-                        Some(encrypt),
-                        &backup_storage_id,
+                let policy = RetryPolicy::default();
+
+                let attempt_result = if result_clone.backup_file.is_none() {
+                    logger_clone.log("error", format!("Missing backup file for storage {}", storage_id));
+
+                    Err(UploadResult {
+                        storage_id: storage_id.clone(),
+                        success: false,
+                        error: Some("Missing backup file path".into()),
+                        remote_file_path: None,
+                        total_size: None,
+                    })
+                } else {
+                    retry(
+                        &format!("Upload to storage {storage_id}"),
+                        &logger_clone,
+                        &policy,
+                        |_| async {
+                            let r = provider
+                                .upload(
+                                    ctx_clone.clone(),
+                                    result_clone.clone(),
+                                    method,
+                                    &storage,
+                                    Some(encrypt),
+                                    &backup_storage_id,
+                                )
+                                .await;
+
+                            if r.success { Ok(r) } else { Err(r) }
+                        },
                     )
-                    .await;
+                    .await
+                };
+
+                let upload_result = match attempt_result {
+                    Ok(r) | Err(r) => r,
+                };
 
                 let status = if upload_result.success { "success" } else { "failed" };
 

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::services::config::DbType;
+use std::fmt::{self, Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -19,4 +20,10 @@ pub struct UploadResult {
     pub error: Option<String>,
     pub remote_file_path: Option<String>,
     pub total_size: Option<u64>,
+}
+
+impl Display for UploadResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.error.as_deref().unwrap_or("unknown error"))
+    }
 }
