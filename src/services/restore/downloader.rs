@@ -32,7 +32,7 @@ impl RestoreService {
 
         let logger_ref = &logger;
 
-        retry("Backup download", &logger, &policy, move |_| {
+        let outcome = retry("Backup download", &logger, &policy, move |_| {
             let expected = expected_size.clone();
 
             async move {
@@ -40,7 +40,13 @@ impl RestoreService {
                     .await
             }
         })
-        .await
+        .await;
+
+        if let Err(e) = &outcome {
+            logger.log("error", format!("Download failed: {e}"));
+        }
+
+        outcome
     }
 
     pub async fn download_once(

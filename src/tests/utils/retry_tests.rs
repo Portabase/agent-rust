@@ -88,7 +88,7 @@ async fn retries_until_success_and_logs_each_attempt() {
 }
 
 #[tokio::test]
-async fn exhausts_attempts_and_logs_a_single_error() {
+async fn exhausts_attempts_and_logs_no_terminal_error() {
     init_tracing_for_test();
     let logger = JobLogger::new();
     let calls = AtomicU32::new(0);
@@ -105,11 +105,7 @@ async fn exhausts_attempts_and_logs_a_single_error() {
 
     let entries = logger.into_entries();
     assert_eq!(entries.iter().filter(|e| e.level == "warn").count(), 2);
-    assert_eq!(entries.iter().filter(|e| e.level == "error").count(), 1);
-    assert_eq!(
-        entries.iter().find(|e| e.level == "error").unwrap().message,
-        "Test op failed after 3 attempts: always"
-    );
+    assert_eq!(entries.iter().filter(|e| e.level == "error").count(), 0);
 }
 
 #[tokio::test]

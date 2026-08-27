@@ -51,8 +51,8 @@ async fn a_failing_backup_is_retried_and_leaves_no_attempt_directory() {
     assert!(
         entries
             .iter()
-            .any(|e| e.level == "error" && e.message.starts_with("Database backup failed after 3 attempts")),
-        "expected a single terminal error naming the attempt count"
+            .any(|e| e.level == "error" && e.message.starts_with("Backup failed:")),
+        "expected a single terminal error from the runner"
     );
 
     let leftovers: Vec<_> = std::fs::read_dir(tmp_path)

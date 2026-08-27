@@ -68,7 +68,6 @@ where
                 attempt += 1;
             }
             Err(e) => {
-                logger.log("error", format!("{op} failed after {total} attempts: {e}"));
                 return Err(e);
             }
         }
