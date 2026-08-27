@@ -2,6 +2,7 @@ use crate::services::backup::logger::JobLogger;
 use crate::settings::CONFIG;
 use rand::Rng;
 use std::fmt::Display;
+use std::future::Future;
 use std::time::Duration;
 
 pub struct RetryPolicy {
@@ -31,15 +32,17 @@ impl RetryPolicy {
     }
 }
 
-pub async fn retry<T, E, F>(
+pub async fn retry<T, E, F, Fut>(
     op: &str,
     logger: &JobLogger,
     policy: &RetryPolicy,
     mut f: F,
 ) -> Result<T, E>
 where
-    F: AsyncFnMut(u32) -> Result<T, E>,
-    E: Display,
+    F: FnMut(u32) -> Fut,
+    Fut: Future<Output = Result<T, E>> + Send,
+    T: Send,
+    E: Display + Send,
 {
     let total = policy.attempts;
     let mut attempt = 1;

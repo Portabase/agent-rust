@@ -49,7 +49,7 @@ async fn first_attempt_success_logs_nothing() {
     let logger = JobLogger::new();
 
     let result: Result<u32, anyhow::Error> =
-        retry("Test op", &logger, &fast_policy(3), async |_| Ok(7)).await;
+        retry("Test op", &logger, &fast_policy(3), |_| async { Ok(7) }).await;
 
     assert_eq!(result.unwrap(), 7);
     assert!(logger.into_entries().is_empty());
@@ -62,7 +62,7 @@ async fn retries_until_success_and_logs_each_attempt() {
     let calls = AtomicU32::new(0);
 
     let result: Result<u32, anyhow::Error> =
-        retry("Test op", &logger, &fast_policy(3), async |_| {
+        retry("Test op", &logger, &fast_policy(3), |_| async {
             let n = calls.fetch_add(1, Ordering::SeqCst) + 1;
             if n < 3 {
                 Err(anyhow::anyhow!("boom {n}"))
@@ -94,7 +94,7 @@ async fn exhausts_attempts_and_logs_a_single_error() {
     let calls = AtomicU32::new(0);
 
     let result: Result<(), anyhow::Error> =
-        retry("Test op", &logger, &fast_policy(3), async |_| {
+        retry("Test op", &logger, &fast_policy(3), |_| async {
             calls.fetch_add(1, Ordering::SeqCst);
             Err(anyhow::anyhow!("always"))
         })
@@ -117,10 +117,11 @@ async fn closure_receives_the_attempt_number() {
     init_tracing_for_test();
     let logger = JobLogger::new();
     let seen = Mutex::new(Vec::new());
+    let seen_ref = &seen;
 
     let result: Result<(), anyhow::Error> =
-        retry("Test op", &logger, &fast_policy(3), async |attempt| {
-            seen.lock().unwrap().push(attempt);
+        retry("Test op", &logger, &fast_policy(3), move |attempt| async move {
+            seen_ref.lock().unwrap().push(attempt);
             Err(anyhow::anyhow!("nope"))
         })
         .await;
