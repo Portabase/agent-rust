@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 use crate::services::backup::logger::JobLogger;
+use crate::utils::retry::{RetryPolicy, retry};
 
 fn human_size(bytes: u64) -> String {
     if bytes >= 1024 * 1024 {
@@ -21,6 +22,28 @@ fn human_size(bytes: u64) -> String {
 
 impl RestoreService {
     pub async fn download_backup(
+        &self,
+        file_url: &str,
+        tmp_path: &Path,
+        logger: Arc<JobLogger>,
+        expected_size: Option<String>,
+    ) -> Result<PathBuf> {
+        let policy = RetryPolicy::default();
+
+        let logger_ref = &logger;
+
+        retry("Backup download", &logger, &policy, move |_| {
+            let expected = expected_size.clone();
+
+            async move {
+                self.download_once(file_url, tmp_path, Arc::clone(logger_ref), expected)
+                    .await
+            }
+        })
+        .await
+    }
+
+    pub async fn download_once(
         &self,
         file_url: &str,
         tmp_path: &Path,
