@@ -12,7 +12,8 @@ pub async fn run(cfg: DatabaseConfig, env: HashMap<String, String>) -> anyhow::R
         .arg("--user")
         .arg(cfg.username)
         .arg("ping")
-        .envs(env);
+        .envs(env)
+        .kill_on_drop(true);
 
     let result = timeout(Duration::from_secs(10), cmd.output()).await;
 
