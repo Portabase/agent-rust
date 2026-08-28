@@ -20,6 +20,7 @@ pub async fn run(cfg: DatabaseConfig) -> Result<bool> {
     }
 
     cmd.arg("PING");
+    cmd.kill_on_drop(true);
 
     debug!("Command Ping Valkey: {:?}", cmd);
 
