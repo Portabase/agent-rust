@@ -146,8 +146,6 @@ impl BackupService {
                         upload_result.error.as_deref().unwrap_or("unknown error")
                     ));
 
-                    // `backup_upload_init` opened a per-storage record; close it as "failed"
-                    // so the server is notified of the failure (no path/size on this path).
                     if let Err(err) = ctx_clone
                         .api
                         .backup_upload_status(
