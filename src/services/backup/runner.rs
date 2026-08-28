@@ -4,6 +4,7 @@ use super::service::BackupService;
 
 use crate::domain::factory::DatabaseFactory;
 use crate::services::config::DatabaseConfig;
+use crate::utils::retry::{RetryPolicy, retry};
 
 use anyhow::Result;
 use std::path::Path;
@@ -39,7 +40,31 @@ impl BackupService {
             });
         }
 
-        match db.backup(tmp_path, Arc::clone(&logger)).await {
+        let policy = RetryPolicy::default();
+
+        let db_ref = &db;
+        let logger_ref = &logger;
+
+        let outcome = retry("Database backup", &logger, &policy, move |attempt| {
+            let dir = tmp_path.join(format!("attempt-{attempt}"));
+
+            async move {
+                if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+                    return Err(anyhow::Error::from(e));
+                }
+
+                match db_ref.backup(&dir, Arc::clone(logger_ref)).await {
+                    Ok(f) => Ok(f),
+                    Err(e) => {
+                        let _ = tokio::fs::remove_dir_all(&dir).await;
+                        Err(e)
+                    }
+                }
+            }
+        })
+        .await;
+
+        match outcome {
             Ok(file) => Ok(BackupResult {
                 generated_id,
                 db_type,

@@ -6,6 +6,7 @@ pub mod file;
 pub mod locks;
 pub mod logging;
 pub mod redis_client;
+pub mod retry;
 pub mod stream;
 pub mod task_manager;
 pub mod text;

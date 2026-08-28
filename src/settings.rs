@@ -16,6 +16,8 @@ pub struct Settings {
     pub timezone: String,
     pub log: String,
     pub chunk_size: usize, // bytes
+    pub retry_attempts: u32,
+    pub retry_backoff_ms: u64,
 }
 
 impl Settings {
@@ -49,6 +51,24 @@ impl Settings {
 
         let chunk_size = chunk_size_mb * 1024 * 1024;
 
+        let retry_attempts = env::var("RETRY_ATTEMPTS")
+            .unwrap_or_else(|_| "3".to_string())
+            .parse::<u32>()
+            .expect("RETRY_ATTEMPTS must be a valid positive integer");
+
+        if retry_attempts < 3 || retry_attempts > 5 {
+            panic!("RETRY_ATTEMPTS must be between 3 and 5");
+        }
+
+        let retry_backoff_ms = env::var("RETRY_BACKOFF_MS")
+            .unwrap_or_else(|_| "1000".to_string())
+            .parse::<u64>()
+            .expect("RETRY_BACKOFF_MS must be a valid positive integer");
+
+        if retry_backoff_ms < 100 || retry_backoff_ms > 30_000 {
+            panic!("RETRY_BACKOFF_MS must be between 100 and 30000 milliseconds");
+        }
+
         let tz = env::var("TZ").unwrap_or_else(|_| "UTC".to_string());
 
         Self {
@@ -64,7 +84,9 @@ impl Settings {
             pooling: pooling_seconds,
             timezone: tz,
             log: env::var("LOG").unwrap_or_else(|_| "info".into()),
-            chunk_size
+            chunk_size,
+            retry_attempts,
+            retry_backoff_ms,
         }
     }
 }

@@ -8,3 +8,5 @@ data:
   POLLING: {{ .Values.env.POLLING | quote }}
   APP_ENV: {{ .Values.env.APP_ENV | quote }}
   LOG: {{ .Values.env.LOG | quote }}
+  RETRY_ATTEMPTS: {{ .Values.env.RETRY_ATTEMPTS | quote }}
+  RETRY_BACKOFF_MS: {{ .Values.env.RETRY_BACKOFF_MS | quote }}

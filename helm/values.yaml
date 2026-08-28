@@ -11,6 +11,8 @@ env:
   POLLING: "5"
   APP_ENV: "production"
   LOG: "info"
+  RETRY_ATTEMPTS: "3"
+  RETRY_BACKOFF_MS: "1000"
 
 resources:
   limits:
