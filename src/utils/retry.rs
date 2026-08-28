@@ -60,7 +60,7 @@ where
                 logger.log(
                     "warn",
                     format!(
-                        "{op} attempt {attempt}/{total} failed: {e} — retrying in {}ms",
+                        "{op} attempt {attempt}/{total} failed: {e} - retrying in {}ms",
                         delay.as_millis()
                     ),
                 );

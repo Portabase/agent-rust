@@ -9,7 +9,7 @@ services:
       - .:/app
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
-#      - ./databases.json:/config/config.json
+      - ./databases.json:/config/config.json
       #- ./databases.toml:/config/config.toml
       - /var/run/docker.sock:/var/run/docker.sock
 #      - cargo-target:/app/target
@@ -21,7 +21,7 @@ services:
       LOG: debug
       TZ: "Europe/Paris"
 #      TMPDIR: /scratch
-      EDGE_KEY: "eyJzZXJ2ZXJVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODciLCJhZ2VudElkIjoiZjlkZjhiNWYtM2I0MC00NWM3LWI3N2UtYzY4NzQ1YmU2NjMwIiwibWFzdGVyS2V5QjY0IjoiQlhWM1hvbEM2NTZTVjdkTmdjV1BHUWxrKytycExJNmxHRGk3Q1BCNWllbz0ifQ=="
+      EDGE_KEY: "eyJzZXJ2ZXJVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODciLCJhZ2VudElkIjoiY2UxNjRiZDItZGZkMy00YzY4LThlZGItNmQ3OTczODAzZWEyIiwibWFzdGVyS2V5QjY0IjoiMUh0djdtWCtYVkJxL0IzUEV2WDlZZjlQeUdVZW5oRHlXemo5THRqNW90WT0ifQ=="
       #CHUNK_SIZE_MB: "1"
       #POOLING: 1
       #RETRY_ATTEMPTS: 3
