@@ -21,6 +21,8 @@ pub async fn run(cfg: DatabaseConfig) -> Result<bool> {
 
     cmd.arg("PING");
 
+    cmd.kill_on_drop(true);
+
     debug!("Command Ping Redis: {:?}", cmd);
 
     let result = timeout(Duration::from_secs(10), cmd.output()).await;

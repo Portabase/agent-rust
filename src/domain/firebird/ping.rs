@@ -20,6 +20,7 @@ pub async fn run(cfg: DatabaseConfig) -> anyhow::Result<bool> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()?;
 
     let query = b"SELECT 1 FROM RDB$DATABASE;\nQUIT;\n";
