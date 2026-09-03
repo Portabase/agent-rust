@@ -9,12 +9,12 @@ services:
       - .:/app
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
-#      - ./databases.json:/config/config.json
+      - ./databases.json:/config/config.json
       #- ./databases.toml:/config/config.toml
-#      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock
 #      - cargo-target:/app/target
-#      - databases_sqlite-data:/sqlite-data/workspace/data
-#      - ./scripts/sqlite/test-db:/sqlite-data-2/workspace/data
+      - databases_sqlite-data:/sqlite-data/workspace/data
+      - ./scripts/sqlite/test-db:/sqlite-data-2/workspace/data
 #      - /bigdisk:/scratch
     environment:
       APP_ENV: development
