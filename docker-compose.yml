@@ -9,19 +9,19 @@ services:
       - .:/app
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
-      - ./databases.json:/config/config.json
+#      - ./databases.json:/config/config.json
       #- ./databases.toml:/config/config.toml
-      - /var/run/docker.sock:/var/run/docker.sock
+#      - /var/run/docker.sock:/var/run/docker.sock
 #      - cargo-target:/app/target
-      - databases_sqlite-data:/sqlite-data/workspace/data
-      - ./scripts/sqlite/test-db:/sqlite-data-2/workspace/data
+#      - databases_sqlite-data:/sqlite-data/workspace/data
+#      - ./scripts/sqlite/test-db:/sqlite-data-2/workspace/data
 #      - /bigdisk:/scratch
     environment:
       APP_ENV: development
       LOG: debug
       TZ: "Europe/Paris"
 #      TMPDIR: /scratch
-      EDGE_KEY: "eyJzZXJ2ZXJVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODciLCJhZ2VudElkIjoiY2UxNjRiZDItZGZkMy00YzY4LThlZGItNmQ3OTczODAzZWEyIiwibWFzdGVyS2V5QjY0IjoiMUh0djdtWCtYVkJxL0IzUEV2WDlZZjlQeUdVZW5oRHlXemo5THRqNW90WT0ifQ=="
+      EDGE_KEY: "eyJzZXJ2ZXJVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODciLCJhZ2VudElkIjoiOWMxMzM5NjItMGE5OC00MmRkLTk1NjUtOTA5ZTkyYTI5N2VkIiwibWFzdGVyS2V5QjY0IjoiMUh0djdtWCtYVkJxL0IzUEV2WDlZZjlQeUdVZW5oRHlXemo5THRqNW90WT0ifQ=="
       #CHUNK_SIZE_MB: "1"
       #POOLING: 1
       #RETRY_ATTEMPTS: 3

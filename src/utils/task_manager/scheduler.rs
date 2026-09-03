@@ -79,7 +79,12 @@ pub async fn execute_task(
             let ctx = Arc::new(Context::new());
             let config_service = ConfigService::new(ctx.clone());
             let backup_service = BackupService::new(ctx.clone());
-            let config = config_service.load(None).unwrap();
+
+            let local = config_service.load_optional(None);
+            let cache_path = std::path::PathBuf::from(&crate::settings::CONFIG.data_path)
+                .join("dashboard_databases.json");
+            let dashboard = crate::services::dashboard_config::load_cache(&cache_path);
+            let config = crate::services::dashboard_config::merge(&local.databases, &dashboard);
 
             let metadata_obj = metadata
                 .into_iter()
