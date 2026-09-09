@@ -9,3 +9,10 @@ RELEASE.md
 
 #IDE configurations
 .idea
+
+# Rust build artifacts (31GB; the builder stage compiles from source)
+target
+
+# Local runtime and tooling artifacts
+dump.rdb
+.superpowers
