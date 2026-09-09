@@ -44,6 +44,15 @@ RUN ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
        | tar -xjf - -C /usr/local/bin sqlcmd \
     && chmod +x /usr/local/bin/sqlcmd
 
+# =========================
+# rclone (all storage backends)
+# =========================
+ARG RCLONE_VERSION=1.75.1
+RUN ARCH=$(dpkg --print-architecture) \
+    && curl -fsSL -o /tmp/rclone.deb "https://downloads.rclone.org/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-${ARCH}.deb" \
+    && dpkg -i /tmp/rclone.deb \
+    && rm /tmp/rclone.deb
+
 ARG TARGETARCH
 
 # =========================
@@ -133,6 +142,12 @@ RUN apt-get update && apt-get install -y \
     valkey \
     firebird3.0-utils \
     && rm -rf /var/lib/apt/lists/*
+
+ARG RCLONE_VERSION=1.75.1
+RUN ARCH=$(dpkg --print-architecture) \
+    && curl -fsSL -o /tmp/rclone.deb "https://downloads.rclone.org/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-${ARCH}.deb" \
+    && dpkg -i /tmp/rclone.deb \
+    && rm /tmp/rclone.deb
 
 ENV DOTNET_ROOT=/usr/local/dotnet
 RUN curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
