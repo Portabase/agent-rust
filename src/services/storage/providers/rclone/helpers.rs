@@ -1,4 +1,14 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
+use bytes::Bytes;
+use futures::{Stream, StreamExt};
+use std::io::Write;
+use std::path::Path;
+use std::pin::Pin;
+use std::process::Stdio;
+use tempfile::NamedTempFile;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::process::Command;
+use tracing::info;
 
 /// Backends that would give a storage channel read/write access to the agent or
 /// dashboard container filesystem. Rejected here as well as in the dashboard's
@@ -69,4 +79,79 @@ pub fn remote_target(remote_name: &str, remote_path: &str, remote_file_path: &st
     } else {
         format!("{remote_name}:{base}/{remote_file_path}")
     }
+}
+
+pub type RcloneStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
+
+/// Writes the pasted config to an owner-only temp file. The file must stay
+/// writable: rclone rewrites it in place when an OAuth backend refreshes its
+/// access token. Deleted when the returned handle drops.
+pub fn write_config(config_text: &str) -> Result<NamedTempFile> {
+    let mut file = NamedTempFile::new().context("failed to create rclone config temp file")?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o600))
+            .context("failed to restrict rclone config permissions")?;
+    }
+
+    file.write_all(config_text.as_bytes())
+        .context("failed to write rclone config")?;
+    file.flush().context("failed to flush rclone config")?;
+
+    Ok(file)
+}
+
+/// Streams `stream` into `rclone rcat <target>`.
+///
+/// stderr is drained on its own task rather than via `wait_with_output`: rclone
+/// can write to stderr while we are still feeding stdin, and a full stderr pipe
+/// would block rclone forever while we block on the write.
+pub async fn rcat(config_path: &Path, target: &str, mut stream: RcloneStream) -> Result<()> {
+    info!("rclone rcat -> {}", target);
+
+    let mut child = Command::new("rclone")
+        .arg("--config")
+        .arg(config_path)
+        .arg("rcat")
+        .arg(target)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to spawn rclone (is the binary installed in this image?)")?;
+
+    let mut stderr_pipe = child.stderr.take().context("rclone stderr unavailable")?;
+    let stderr_task = tokio::spawn(async move {
+        let mut buf = String::new();
+        let _ = stderr_pipe.read_to_string(&mut buf).await;
+        buf
+    });
+
+    let mut stdin = child.stdin.take().context("rclone stdin unavailable")?;
+
+    while let Some(chunk) = stream.next().await {
+        // A stream error is ours, not rclone's — report it directly.
+        let chunk = chunk.context("backup stream failed")?;
+
+        // A write error means rclone already exited. Stop pumping and let the
+        // exit status below produce the real reason; surfacing the broken-pipe
+        // error here would hide it.
+        if stdin.write_all(&chunk).await.is_err() {
+            break;
+        }
+    }
+
+    let _ = stdin.flush().await;
+    drop(stdin); // EOF — rcat finalizes the upload only once stdin closes.
+
+    let status = child.wait().await.context("failed to wait for rclone")?;
+    let stderr = stderr_task.await.unwrap_or_default();
+
+    if !status.success() {
+        bail!("rclone rcat failed ({status}): {}", stderr.trim());
+    }
+
+    Ok(())
 }

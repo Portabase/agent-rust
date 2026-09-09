@@ -131,3 +131,125 @@ fn an_empty_remote_path_falls_back_to_the_global_backup_folder() {
         format!("ovhcloud-rbx:my-bucket/{remote_file_path}")
     );
 }
+
+use crate::services::storage::providers::rclone::helpers::{rcat, write_config};
+
+use bytes::Bytes;
+use futures::stream;
+use std::process::Command;
+use testcontainers::core::{IntoContainerPort, WaitFor};
+use testcontainers::runners::AsyncRunner;
+use testcontainers::{GenericImage, ImageExt};
+
+const BUCKET: &str = "portabase";
+
+async fn start_minio() -> (testcontainers::ContainerAsync<GenericImage>, String) {
+    let container = GenericImage::new("minio/minio", "latest")
+        .with_exposed_port(9000.tcp())
+        .with_wait_for(WaitFor::message_on_stderr("API:"))
+        .with_env_var("MINIO_ROOT_USER", "minioadmin")
+        .with_env_var("MINIO_ROOT_PASSWORD", "minioadmin")
+        .with_cmd(["server", "/data"])
+        .start()
+        .await
+        .unwrap();
+
+    let host = container.get_host().await.unwrap().to_string();
+    let port = container.get_host_port_ipv4(9000).await.unwrap();
+    (container, format!("http://{host}:{port}"))
+}
+
+fn minio_config(endpoint: &str) -> String {
+    format!(
+        "[minio]\n\
+         type = s3\n\
+         provider = Minio\n\
+         access_key_id = minioadmin\n\
+         secret_access_key = minioadmin\n\
+         endpoint = {endpoint}\n\
+         region = us-east-1\n\
+         force_path_style = true\n"
+    )
+}
+
+/// Runs rclone synchronously and returns stdout, asserting a zero exit.
+fn rclone_ok(config_path: &std::path::Path, args: &[&str]) -> Vec<u8> {
+    let out = Command::new("rclone")
+        .arg("--config")
+        .arg(config_path)
+        .args(args)
+        .output()
+        .expect("rclone binary not found — is it installed in this image?");
+
+    assert!(
+        out.status.success(),
+        "rclone {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    out.stdout
+}
+
+#[test]
+fn write_config_creates_an_owner_only_file_with_the_exact_text() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let file = write_config(OVH_CONFIG).unwrap();
+
+    let mode = std::fs::metadata(file.path()).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600, "config file must not be group/world readable");
+
+    assert_eq!(std::fs::read_to_string(file.path()).unwrap(), OVH_CONFIG);
+}
+
+#[tokio::test]
+async fn rcat_streams_a_multi_chunk_body_to_minio() {
+    init_tracing_for_test();
+
+    let (_container, endpoint) = start_minio().await;
+    let config = write_config(&minio_config(&endpoint)).unwrap();
+
+    rclone_ok(config.path(), &["mkdir", &format!("minio:{BUCKET}")]);
+
+    // 10 KiB fed as 1 KiB chunks, so the stdin pump loops rather than doing one write.
+    let data = vec![7u8; 10 * 1024];
+    let chunks: Vec<Result<Bytes, std::io::Error>> = data
+        .chunks(1024)
+        .map(|c| Ok(Bytes::copy_from_slice(c)))
+        .collect();
+
+    let target = remote_target("minio", BUCKET, "backups/2026-09-09/test.bin");
+
+    rcat(config.path(), &target, Box::pin(stream::iter(chunks)))
+        .await
+        .unwrap();
+
+    let got = rclone_ok(config.path(), &["cat", &target]);
+    assert_eq!(got, data);
+}
+
+#[tokio::test]
+async fn rcat_reports_rclone_stderr_when_the_remote_is_unreachable() {
+    init_tracing_for_test();
+
+    // Port 1 refuses connections, so rclone fails fast and closes stdin under us.
+    let config = write_config(&minio_config("http://127.0.0.1:1")).unwrap();
+
+    let chunks: Vec<Result<Bytes, std::io::Error>> =
+        vec![Ok(Bytes::from_static(&[0u8; 4096]))];
+
+    let err = rcat(
+        config.path(),
+        "minio:portabase/x.bin",
+        Box::pin(stream::iter(chunks)),
+    )
+    .await
+    .expect_err("upload to an unreachable endpoint must fail");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("rclone rcat failed"),
+        "the broken stdin pipe must not mask rclone's own error: {msg}"
+    );
+    assert!(!msg.trim().ends_with("failed"), "rclone stderr must be included: {msg}");
+}
