@@ -251,5 +251,11 @@ async fn rcat_reports_rclone_stderr_when_the_remote_is_unreachable() {
         msg.contains("rclone rcat failed"),
         "the broken stdin pipe must not mask rclone's own error: {msg}"
     );
-    assert!(!msg.trim().ends_with("failed"), "rclone stderr must be included: {msg}");
+    let (_, stderr_part) = msg
+        .rsplit_once(": ")
+        .expect("bail message must carry rclone stderr after the exit status");
+    assert!(
+        !stderr_part.trim().is_empty(),
+        "rclone stderr must be included: {msg}"
+    );
 }

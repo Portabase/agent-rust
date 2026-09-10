@@ -133,7 +133,17 @@ pub async fn rcat(config_path: &Path, target: &str, mut stream: RcloneStream) ->
 
     while let Some(chunk) = stream.next().await {
         // A stream error is ours, not rclone's — report it directly.
-        let chunk = chunk.context("backup stream failed")?;
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(e) => {
+                // Returning here would drop stdin and hand rclone an EOF, which it
+                // treats as a complete stream — finalizing a truncated object that
+                // looks like a good backup. Kill it instead.
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                return Err(e).context("backup stream failed");
+            }
+        };
 
         // A write error means rclone already exited. Stop pumping and let the
         // exit status below produce the real reason; surfacing the broken-pipe
