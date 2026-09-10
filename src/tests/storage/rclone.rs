@@ -66,18 +66,50 @@ fn validate_config_rejects_alias_backend() {
 
 #[test]
 fn validate_config_rejects_a_blocked_backend_in_a_chained_section() {
-    // The target remote is fine, but it wraps a `local` remote. Checking only the
-    // named section would let this through.
+    // Both sections are blocked now: `crypt` is a wrapping backend and `disk` is
+    // local. The scan reports the first in file order, which proves it does not
+    // stop at the section named by the caller.
     let cfg = "[secret]\ntype = crypt\nremote = disk:vault\n\n[disk]\ntype = local\n";
     let err = validate_config(cfg, "secret").unwrap_err().to_string();
+    assert!(err.contains("crypt"), "unexpected error: {err}");
+    assert!(err.contains("secret"), "error should name the offending remote: {err}");
+
+    // With the wrapper allowed, the scan still reaches the wrapped local remote.
+    let cfg = "[outer]\ntype = s3\nprovider = Minio\n\n[disk]\ntype = local\n";
+    let err = validate_config(cfg, "outer").unwrap_err().to_string();
     assert!(err.contains("local"), "unexpected error: {err}");
     assert!(err.contains("disk"), "error should name the offending remote: {err}");
 }
 
 #[test]
-fn validate_config_accepts_a_chained_crypt_over_s3() {
+fn validate_config_rejects_crypt_even_over_an_allowed_remote() {
+    // Wrapping backends are blocked outright: a channel carries a single section,
+    // so there is nothing for them to wrap.
     let cfg = format!("[secret]\ntype = crypt\nremote = ovhcloud-rbx:bucket\n\n{OVH_CONFIG}");
-    assert!(validate_config(&cfg, "secret").is_ok());
+    let err = validate_config(&cfg, "secret").unwrap_err().to_string();
+    assert!(err.contains("crypt"), "unexpected error: {err}");
+}
+
+#[test]
+fn validate_config_rejects_a_wrapping_backend_pointing_at_a_bare_local_path() {
+    // The escape the `local` entry alone does not catch: no section declares
+    // `type = local`, but rclone would still read and write the filesystem.
+    for backend in ["crypt", "chunker", "compress", "union", "combine", "hasher"] {
+        let cfg = format!("[sneaky]\ntype = {backend}\nremote = /etc\n");
+        let err = validate_config(&cfg, "sneaky")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(backend), "{backend} must be rejected: {err}");
+    }
+}
+
+#[test]
+fn validate_config_rejects_backends_that_cannot_hold_a_backup() {
+    for backend in ["memory", "http", "googlephotos"] {
+        let cfg = format!("[nope]\ntype = {backend}\n");
+        let err = validate_config(&cfg, "nope").unwrap_err().to_string();
+        assert!(err.contains(backend), "{backend} must be rejected: {err}");
+    }
 }
 
 #[test]

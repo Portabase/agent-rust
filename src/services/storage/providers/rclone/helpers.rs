@@ -10,10 +10,35 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tracing::info;
 
-/// Backends that would give a storage channel read/write access to the agent or
-/// dashboard container filesystem. Rejected here as well as in the dashboard's
-/// zod schema, because the agent receives this config over the wire.
-const BLOCKED_BACKEND_TYPES: [&str; 2] = ["local", "alias"];
+/// Backend types a storage channel may not use.
+///
+/// Kept in lockstep with `BLOCKED_BACKEND_TYPES` in the dashboard's
+/// `rclone.parse.ts`. Enforced here as well as there, because the agent
+/// receives this config over the wire and must not trust it.
+///
+/// Three groups:
+///  * `local` / `alias` reach the container filesystem directly.
+///  * The wrapping ("virtual") backends each need a second remote to wrap,
+///    which a single-section channel config cannot supply — and several of
+///    them accept a bare local path as that remote, which would otherwise
+///    walk straight past the `local` entry above.
+///  * `memory`, `http` and `googlephotos` cannot hold a backup: in-RAM and
+///    lost on exit, read-only, and media-only-with-rewriting respectively.
+const BLOCKED_BACKEND_TYPES: [&str; 13] = [
+    "local",
+    "alias",
+    "crypt",
+    "chunker",
+    "compress",
+    "union",
+    "combine",
+    "hasher",
+    "archive",
+    "cache",
+    "memory",
+    "http",
+    "googlephotos",
+];
 
 /// Section headers and their `type =` values, in file order.
 fn sections(config_text: &str) -> Vec<(String, Option<String>)> {
