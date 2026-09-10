@@ -260,6 +260,44 @@ async fn rcat_reports_rclone_stderr_when_the_remote_is_unreachable() {
     );
 }
 
+#[tokio::test]
+async fn rcat_aborts_the_upload_when_the_stream_fails() {
+    init_tracing_for_test();
+
+    let (_container, endpoint) = start_minio().await;
+    let config = write_config(&minio_config(&endpoint)).unwrap();
+
+    rclone_ok(config.path(), &["mkdir", &format!("minio:{BUCKET}")]);
+
+    // One good chunk, then a stream error. If rcat let this fall through to a
+    // dropped stdin, rclone would see a clean EOF and finalize a truncated
+    // object that looks like a valid backup.
+    let chunks: Vec<Result<Bytes, std::io::Error>> = vec![
+        Ok(Bytes::from_static(&[1u8; 1024])),
+        Err(std::io::Error::other("injected stream failure")),
+    ];
+
+    let target = remote_target("minio", BUCKET, "backups/2026-09-09/aborted.bin");
+
+    let err = rcat(config.path(), &target, Box::pin(stream::iter(chunks)))
+        .await
+        .expect_err("a stream error must fail the upload");
+    assert!(
+        err.to_string().contains("backup stream failed"),
+        "unexpected error: {err}"
+    );
+
+    // Object must not exist: `lsjson --stat` on a miss reports Name:"" IsDir:true;
+    // a real hit reports the file's basename and IsDir:false.
+    let stat_out = rclone_ok(config.path(), &["lsjson", "--stat", &target]);
+    let stat: serde_json::Value = serde_json::from_slice(&stat_out).unwrap();
+    assert_eq!(
+        stat["Name"], "",
+        "rclone must not have finalized the truncated object: {stat}"
+    );
+    assert_eq!(stat["IsDir"], true, "a miss reports IsDir: true: {stat}");
+}
+
 use crate::core::context::Context;
 use crate::services::api::ApiClient;
 use crate::services::backup::models::BackupResult;

@@ -138,6 +138,21 @@ impl RestoreService {
             );
         }
 
+        // The dashboard streams `rclone cat` output chunked, with no
+        // Content-Length. If rclone dies mid-transfer the stream ends cleanly
+        // (EOF, not an error), so a short body would otherwise pass silently.
+        // `total` is the plain, pre-encryption size; an encrypted object is
+        // strictly larger, so this must stay a lower bound, never equality.
+        if let Some(total) = total
+            && downloaded < total
+        {
+            anyhow::bail!(
+                "Downloaded {} bytes but expected at least {} — backup appears truncated",
+                downloaded,
+                total
+            );
+        }
+
         logger.log(
             "info",
             format!(
