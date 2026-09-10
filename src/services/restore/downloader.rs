@@ -1,5 +1,7 @@
 use super::service::RestoreService;
 
+use crate::services::backup::logger::JobLogger;
+use crate::utils::retry::{RetryPolicy, retry};
 use anyhow::Result;
 use futures::StreamExt;
 use reqwest::{Client, Url};
@@ -7,8 +9,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
-use crate::services::backup::logger::JobLogger;
-use crate::utils::retry::{RetryPolicy, retry};
 
 fn human_size(bytes: u64) -> String {
     if bytes >= 1024 * 1024 {
@@ -98,7 +98,9 @@ impl RestoreService {
             format!(
                 "Downloading backup '{}' ({})",
                 filename,
-                total.map(human_size).unwrap_or_else(|| "unknown size".to_string())
+                total
+                    .map(human_size)
+                    .unwrap_or_else(|| "unknown size".to_string())
             ),
         );
 
@@ -138,16 +140,11 @@ impl RestoreService {
             );
         }
 
-        // The dashboard streams `rclone cat` output chunked, with no
-        // Content-Length. If rclone dies mid-transfer the stream ends cleanly
-        // (EOF, not an error), so a short body would otherwise pass silently.
-        // `total` is the plain, pre-encryption size; an encrypted object is
-        // strictly larger, so this must stay a lower bound, never equality.
         if let Some(total) = total
             && downloaded < total
         {
             anyhow::bail!(
-                "Downloaded {} bytes but expected at least {} — backup appears truncated",
+                "Downloaded {} bytes but expected at least {} - backup appears truncated",
                 downloaded,
                 total
             );

@@ -17,8 +17,6 @@ const OVH_CONFIG: &str = "[ovhcloud-rbx]\n\
 fn config_deserializes_from_dashboard_camel_case() {
     init_tracing_for_test();
 
-    // Exactly the shape the dashboard puts on the wire: camelCase keys inside
-    // `config`, converted to snake_case by `deserialize_snake_case`.
     let storage: DatabaseStorage = serde_json::from_value(serde_json::json!({
         "id": "storage-1",
         "provider": "rclone",
@@ -66,15 +64,11 @@ fn validate_config_rejects_alias_backend() {
 
 #[test]
 fn validate_config_rejects_a_blocked_backend_in_a_chained_section() {
-    // Both sections are blocked now: `crypt` is a wrapping backend and `disk` is
-    // local. The scan reports the first in file order, which proves it does not
-    // stop at the section named by the caller.
     let cfg = "[secret]\ntype = crypt\nremote = disk:vault\n\n[disk]\ntype = local\n";
     let err = validate_config(cfg, "secret").unwrap_err().to_string();
     assert!(err.contains("crypt"), "unexpected error: {err}");
     assert!(err.contains("secret"), "error should name the offending remote: {err}");
 
-    // With the wrapper allowed, the scan still reaches the wrapped local remote.
     let cfg = "[outer]\ntype = s3\nprovider = Minio\n\n[disk]\ntype = local\n";
     let err = validate_config(cfg, "outer").unwrap_err().to_string();
     assert!(err.contains("local"), "unexpected error: {err}");
@@ -83,8 +77,6 @@ fn validate_config_rejects_a_blocked_backend_in_a_chained_section() {
 
 #[test]
 fn validate_config_rejects_crypt_even_over_an_allowed_remote() {
-    // Wrapping backends are blocked outright: a channel carries a single section,
-    // so there is nothing for them to wrap.
     let cfg = format!("[secret]\ntype = crypt\nremote = ovhcloud-rbx:bucket\n\n{OVH_CONFIG}");
     let err = validate_config(&cfg, "secret").unwrap_err().to_string();
     assert!(err.contains("crypt"), "unexpected error: {err}");
@@ -92,8 +84,6 @@ fn validate_config_rejects_crypt_even_over_an_allowed_remote() {
 
 #[test]
 fn validate_config_rejects_a_wrapping_backend_pointing_at_a_bare_local_path() {
-    // The escape the `local` entry alone does not catch: no section declares
-    // `type = local`, but rclone would still read and write the filesystem.
     for backend in ["crypt", "chunker", "compress", "union", "combine", "hasher"] {
         let cfg = format!("[sneaky]\ntype = {backend}\nremote = /etc\n");
         let err = validate_config(&cfg, "sneaky")
@@ -114,8 +104,6 @@ fn validate_config_rejects_backends_that_cannot_hold_a_backup() {
 
 #[test]
 fn remote_path_is_a_prefix_ahead_of_the_backup_folder() {
-    // `remotePath` points at storage that may hold other things; every backup
-    // lands under its own `backups/` subtree beneath it.
     assert_eq!(
         remote_target("ovhcloud-rbx", "my-bucket", "backups/2026-09-09/x.tar.gz"),
         "ovhcloud-rbx:my-bucket/backups/2026-09-09/x.tar.gz"
@@ -144,11 +132,6 @@ fn remote_target_handles_an_empty_remote_path() {
 
 #[test]
 fn an_empty_remote_path_falls_back_to_the_global_backup_folder() {
-    // remotePath is optional. When it is empty the destination comes entirely
-    // from `full_file_path`, which the dashboard drives with
-    // folderName = getBackupFolderName() (BACKUP_FOLDER_NAME, default "backups")
-    // and which defaults to "backups" again on its own if that is absent.
-    // No fallback code of our own — this test pins the composed result.
     let remote_file_path = full_file_path(&"x.tar.gz".to_string(), None);
     assert!(remote_file_path.starts_with("backups/"));
 
@@ -157,7 +140,6 @@ fn an_empty_remote_path_falls_back_to_the_global_backup_folder() {
         format!("ovhcloud-rbx:{remote_file_path}")
     );
 
-    // Setting remotePath only prepends; the backups/<date>/ tail is unchanged.
     assert_eq!(
         remote_target("ovhcloud-rbx", "my-bucket", &remote_file_path),
         format!("ovhcloud-rbx:my-bucket/{remote_file_path}")
@@ -204,7 +186,6 @@ fn minio_config(endpoint: &str) -> String {
     )
 }
 
-/// Runs rclone synchronously and returns stdout, asserting a zero exit.
 fn rclone_ok(config_path: &std::path::Path, args: &[&str]) -> Vec<u8> {
     let out = Command::new("rclone")
         .arg("--config")
@@ -243,7 +224,6 @@ async fn rcat_streams_a_multi_chunk_body_to_minio() {
 
     rclone_ok(config.path(), &["mkdir", &format!("minio:{BUCKET}")]);
 
-    // 10 KiB fed as 1 KiB chunks, so the stdin pump loops rather than doing one write.
     let data = vec![7u8; 10 * 1024];
     let chunks: Vec<Result<Bytes, std::io::Error>> = data
         .chunks(1024)
@@ -264,7 +244,6 @@ async fn rcat_streams_a_multi_chunk_body_to_minio() {
 async fn rcat_reports_rclone_stderr_when_the_remote_is_unreachable() {
     init_tracing_for_test();
 
-    // Port 1 refuses connections, so rclone fails fast and closes stdin under us.
     let config = write_config(&minio_config("http://127.0.0.1:1")).unwrap();
 
     let chunks: Vec<Result<Bytes, std::io::Error>> =
@@ -301,9 +280,6 @@ async fn rcat_aborts_the_upload_when_the_stream_fails() {
 
     rclone_ok(config.path(), &["mkdir", &format!("minio:{BUCKET}")]);
 
-    // One good chunk, then a stream error. If rcat let this fall through to a
-    // dropped stdin, rclone would see a clean EOF and finalize a truncated
-    // object that looks like a valid backup.
     let chunks: Vec<Result<Bytes, std::io::Error>> = vec![
         Ok(Bytes::from_static(&[1u8; 1024])),
         Err(std::io::Error::other("injected stream failure")),
@@ -319,8 +295,6 @@ async fn rcat_aborts_the_upload_when_the_stream_fails() {
         "unexpected error: {err}"
     );
 
-    // Object must not exist: `lsjson --stat` on a miss reports Name:"" IsDir:true;
-    // a real hit reports the file's basename and IsDir:false.
     let stat_out = rclone_ok(config.path(), &["lsjson", "--stat", &target]);
     let stat: serde_json::Value = serde_json::from_slice(&stat_out).unwrap();
     assert_eq!(

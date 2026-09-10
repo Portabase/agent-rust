@@ -19,7 +19,6 @@ use tracing::{error, info};
 
 pub struct RcloneProvider {}
 
-/// Failure shorthand — every early return reports the same shape.
 fn failed(storage_id: &str, error: impl ToString, total_size: Option<u64>) -> UploadResult {
     UploadResult {
         storage_id: storage_id.to_string(),
@@ -81,7 +80,6 @@ impl StorageProvider for RcloneProvider {
         let file_name = full_file_name(encrypt);
         let remote_file_path = full_file_path(&file_name, storage.folder_name.as_deref());
 
-        // Held for the whole transfer; the temp file is removed when it drops.
         let config_file = match write_config(&config.config_text) {
             Ok(f) => f,
             Err(e) => {

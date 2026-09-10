@@ -10,20 +10,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tracing::info;
 
-/// Backend types a storage channel may not use.
-///
-/// Kept in lockstep with `BLOCKED_BACKEND_TYPES` in the dashboard's
-/// `rclone.parse.ts`. Enforced here as well as there, because the agent
-/// receives this config over the wire and must not trust it.
-///
-/// Three groups:
-///  * `local` / `alias` reach the container filesystem directly.
-///  * The wrapping ("virtual") backends each need a second remote to wrap,
-///    which a single-section channel config cannot supply — and several of
-///    them accept a bare local path as that remote, which would otherwise
-///    walk straight past the `local` entry above.
-///  * `memory`, `http` and `googlephotos` cannot hold a backup: in-RAM and
-///    lost on exit, read-only, and media-only-with-rewriting respectively.
 const BLOCKED_BACKEND_TYPES: [&str; 13] = [
     "local",
     "alias",
@@ -40,7 +26,6 @@ const BLOCKED_BACKEND_TYPES: [&str; 13] = [
     "googlephotos",
 ];
 
-/// Section headers and their `type =` values, in file order.
 fn sections(config_text: &str) -> Vec<(String, Option<String>)> {
     let mut out: Vec<(String, Option<String>)> = Vec::new();
 
@@ -67,9 +52,7 @@ fn sections(config_text: &str) -> Vec<(String, Option<String>)> {
     out
 }
 
-/// Rejects a config that names a missing remote or reaches a blocked backend.
-/// Every section is checked, not only `remote_name` — a `crypt` remote can wrap
-/// a `local` one, and checking only the named section would let that through.
+
 pub fn validate_config(config_text: &str, remote_name: &str) -> Result<()> {
     let sections = sections(config_text);
 
@@ -95,7 +78,7 @@ pub fn validate_config(config_text: &str, remote_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// `<remote>:<remote_path>/<remote_file_path>`, collapsing an empty path.
+/// `<remote>:<remote_path>/<remote_file_path>`
 pub fn remote_target(remote_name: &str, remote_path: &str, remote_file_path: &str) -> String {
     let base = remote_path.trim().trim_matches('/');
 
@@ -108,9 +91,6 @@ pub fn remote_target(remote_name: &str, remote_path: &str, remote_file_path: &st
 
 pub type RcloneStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
-/// Writes the pasted config to an owner-only temp file. The file must stay
-/// writable: rclone rewrites it in place when an OAuth backend refreshes its
-/// access token. Deleted when the returned handle drops.
 pub fn write_config(config_text: &str) -> Result<NamedTempFile> {
     let mut file = NamedTempFile::new().context("failed to create rclone config temp file")?;
 
@@ -128,11 +108,6 @@ pub fn write_config(config_text: &str) -> Result<NamedTempFile> {
     Ok(file)
 }
 
-/// Streams `stream` into `rclone rcat <target>`.
-///
-/// stderr is drained on its own task rather than via `wait_with_output`: rclone
-/// can write to stderr while we are still feeding stdin, and a full stderr pipe
-/// would block rclone forever while we block on the write.
 pub async fn rcat(config_path: &Path, target: &str, mut stream: RcloneStream) -> Result<()> {
     info!("rclone rcat -> {}", target);
 
@@ -165,29 +140,22 @@ pub async fn rcat(config_path: &Path, target: &str, mut stream: RcloneStream) ->
     let mut stdin = child.stdin.take().context("rclone stdin unavailable")?;
 
     while let Some(chunk) = stream.next().await {
-        // A stream error is ours, not rclone's — report it directly.
         let chunk = match chunk {
             Ok(c) => c,
             Err(e) => {
-                // Returning here would drop stdin and hand rclone an EOF, which it
-                // treats as a complete stream — finalizing a truncated object that
-                // looks like a good backup. Kill it instead.
                 let _ = child.start_kill();
                 let _ = child.wait().await;
                 return Err(e).context("backup stream failed");
             }
         };
 
-        // A write error means rclone already exited. Stop pumping and let the
-        // exit status below produce the real reason; surfacing the broken-pipe
-        // error here would hide it.
         if stdin.write_all(&chunk).await.is_err() {
             break;
         }
     }
 
     let _ = stdin.flush().await;
-    drop(stdin); // EOF — rcat finalizes the upload only once stdin closes.
+    drop(stdin);
 
     let status = child.wait().await.context("failed to wait for rclone")?;
     let stderr = stderr_task.await.unwrap_or_default();

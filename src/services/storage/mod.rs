@@ -27,7 +27,6 @@ pub trait StorageProvider: Send + Sync {
     ) -> UploadResult;
 }
 
-/// Factory to create provider instance from storage config
 pub fn get_provider(storage: &DatabaseStorage) -> Option<Box<dyn StorageProvider>> {
     info!("Getting provider");
     info!("{:#?}", storage.provider.as_str());
