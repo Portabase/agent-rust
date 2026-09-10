@@ -259,3 +259,131 @@ async fn rcat_reports_rclone_stderr_when_the_remote_is_unreachable() {
         "rclone stderr must be included: {msg}"
     );
 }
+
+use crate::core::context::Context;
+use crate::services::api::ApiClient;
+use crate::services::backup::models::BackupResult;
+use crate::services::config::DbType;
+use crate::services::storage::providers::rclone::RcloneProvider;
+use crate::services::storage::{StorageProvider, get_provider};
+use crate::utils::common::BackupMethod;
+use crate::utils::edge_key::EdgeKey;
+
+use std::io::Write as _;
+use std::sync::Arc;
+use tempfile::NamedTempFile;
+
+fn test_context() -> Arc<Context> {
+    Arc::new(Context {
+        edge_key: EdgeKey {
+            server_url: String::new(),
+            agent_id: "agent-1".to_string(),
+            master_key_b64: String::new(),
+        },
+        api: ApiClient::new(String::new()),
+    })
+}
+
+fn storage_for(config_text: &str, remote_path: &str) -> DatabaseStorage {
+    serde_json::from_value(serde_json::json!({
+        "id": "storage-1",
+        "provider": "rclone",
+        "folderName": "backups",
+        "config": {
+            "configText": config_text,
+            "remoteName": "minio",
+            "remotePath": remote_path,
+        }
+    }))
+    .unwrap()
+}
+
+#[test]
+fn factory_resolves_the_rclone_provider_key() {
+    let storage = storage_for(OVH_CONFIG, "bucket");
+    assert!(
+        get_provider(&storage).is_some(),
+        "get_provider must recognise the \"rclone\" key"
+    );
+}
+
+#[tokio::test]
+async fn provider_uploads_an_unencrypted_backup_to_minio() {
+    init_tracing_for_test();
+
+    let (_container, endpoint) = start_minio().await;
+    let config_text = minio_config(&endpoint);
+
+    let bootstrap = write_config(&config_text).unwrap();
+    rclone_ok(bootstrap.path(), &["mkdir", &format!("minio:{BUCKET}")]);
+
+    let payload = vec![42u8; 64 * 1024];
+    let mut backup_file = NamedTempFile::new().unwrap();
+    backup_file.write_all(&payload).unwrap();
+    backup_file.flush().unwrap();
+
+    let storage = storage_for(&config_text, BUCKET);
+
+    let result = RcloneProvider {}
+        .upload(
+            test_context(),
+            BackupResult {
+                generated_id: "db-1".to_string(),
+                db_type: DbType::Postgresql,
+                status: "success".to_string(),
+                backup_file: Some(backup_file.path().to_path_buf()),
+                code: None,
+            },
+            BackupMethod::Automatic,
+            &storage,
+            Some(false),
+            "backup-storage-1",
+        )
+        .await;
+
+    assert!(result.success, "upload failed: {:?}", result.error);
+    assert_eq!(result.total_size, Some(payload.len() as u64));
+
+    let remote_file_path = result.remote_file_path.expect("remote path must be reported");
+    assert!(
+        remote_file_path.starts_with("backups/"),
+        "folder_name must prefix the path: {remote_file_path}"
+    );
+
+    let target = remote_target("minio", BUCKET, &remote_file_path);
+    assert_eq!(rclone_ok(bootstrap.path(), &["cat", &target]), payload);
+}
+
+#[tokio::test]
+async fn provider_refuses_a_blocked_backend_without_spawning_rclone() {
+    init_tracing_for_test();
+
+    let mut backup_file = NamedTempFile::new().unwrap();
+    backup_file.write_all(b"payload").unwrap();
+    backup_file.flush().unwrap();
+
+    let storage = storage_for("[minio]\ntype = local\n", "bucket");
+
+    let result = RcloneProvider {}
+        .upload(
+            test_context(),
+            BackupResult {
+                generated_id: "db-1".to_string(),
+                db_type: DbType::Postgresql,
+                status: "success".to_string(),
+                backup_file: Some(backup_file.path().to_path_buf()),
+                code: None,
+            },
+            BackupMethod::Automatic,
+            &storage,
+            Some(false),
+            "backup-storage-1",
+        )
+        .await;
+
+    assert!(!result.success);
+    assert!(
+        result.error.unwrap_or_default().contains("local"),
+        "the error must name the rejected backend type"
+    );
+}
